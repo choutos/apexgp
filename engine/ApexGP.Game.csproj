@@ -1,0 +1,17 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>ApexGP.Game</RootNamespace>
+    <AssemblyName>ApexGP.Game</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <NoWarn>CA1416</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\src\ApexGP.Core\ApexGP.Core.csproj" />
+  </ItemGroup>
+
+</Project>

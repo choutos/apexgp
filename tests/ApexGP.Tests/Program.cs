@@ -25,6 +25,7 @@ public static class Program
         Run("vehicle.idlesAtStandstill", VehicleDynamicsTests.IdlesAtStandstill);
         Run("vehicle.acceleratesTo100", VehicleDynamicsTests.AcceleratesTo100Kmh);
         Run("vehicle.brakesFrom100", VehicleDynamicsTests.BrakesFrom100Kmh);
+        Run("vehicle.brakesFromLowSpeed", VehicleDynamicsTests.BrakesFromLowSpeed);
         Run("vehicle.steadyStateTopSpeed", VehicleDynamicsTests.SteadyStateTopSpeed);
         Run("vehicle.cornering", VehicleDynamicsTests.CorneringSteersAndStaysSane);
         Run("vehicle.mixed120sStable", VehicleDynamicsTests.MixedRun120sStable);

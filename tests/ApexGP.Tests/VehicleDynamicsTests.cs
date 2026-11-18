@@ -38,15 +38,22 @@ public static class VehicleDynamicsTests
         TestCars.Simulate(v, 0.1);
         Vector3 startPos = v.Position;
         double startHeading = HeadingOf(v);
+        double startKmh = v.SpeedKmh;
         v.Throttle = 0.0;
         v.Brake = 1.0;
         double dt = 1.0 / 240.0, t = 0;
-        while (v.SpeedKmh > 0.5 && t < 8.0) { v.Step(dt); t += dt; }
+        while (v.SpeedKmh > 0.5 && t < 8.0)
+        {
+            v.Step(dt);
+            t += dt;
+            if (Math.Abs(t - Math.Round(t * 4) / 4.0) < dt / 2)
+                Console.WriteLine($"      brake@{t:F2}s: {v.SpeedKmh:F1} km/h, rearK={v.Wheels[2].SlipRatio:F2}, fK={v.Wheels[0].SlipRatio:F2}, loads=({v.Wheels[0].ContactLoad:F0}/{v.Wheels[2].ContactLoad:F0})");
+        }
         double dist = (v.Position - startPos).Length();
         double dHead = AngleDiff(HeadingOf(v), startHeading);
         Checks.Check(v.SpeedKmh <= 0.6, $"still moving at {v.SpeedKmh:F2} km/h after full braking");
-        Checks.Check(dist <= 60.0, $"braking distance {dist:F1} m > 60 m");
-        Checks.Check(t <= 6.0, $"stopping time {t:F2} s > 6 s");
+        Checks.Check(dist <= 55.0, $"braking distance {dist:F1} m > 55 m");
+        Checks.Check(t <= 5.0, $"stopping time {t:F2} s > 5 s");
         Checks.Check(Math.Abs(dHead) < 10, $"car rotated {dHead:F1}° while braking straight");
         Checks.Check(!v.Diverged, "diverged during braking");
     }
@@ -126,6 +133,31 @@ public static class VehicleDynamicsTests
         double rear = v.Wheels[2].SuspensionCompression + v.Wheels[3].SuspensionCompression;
         Checks.Check(rear > front + 0.005, $"no squat under power: rear {rear:F4} vs front {front:F4}");
         Checks.Check(!v.Diverged, "diverged");
+    }
+
+    public static void BrakesFromLowSpeed()
+    {
+        // Replicate the Godot shell exactly: spawn, 1.5 s WOT at 1/120 s substeps, full brake.
+        var v = TestCars.PrototypeGtB();
+        for (int i = 0; i < 180; i++)
+        {
+            v.Throttle = 1.0;
+            v.Step(1.0 / 120.0);
+            v.Step(1.0 / 120.0);
+        }
+        double startKmh = v.SpeedKmh;
+        v.Throttle = 0.0;
+        v.Brake = 1.0;
+        double dt = 1.0 / 120.0, t = 0;
+        while (v.SpeedKmh > 0.5 && t < 5.0)
+        {
+            v.Step(dt);
+            t += dt;
+            if (Math.Abs(t - Math.Round(t * 2) / 2.0) < dt / 2)
+                Console.WriteLine($"      brake@{t:F2}s: {v.SpeedKmh:F2} km/h, clutch={v.Drivetrain.Clutch}, rpm={v.EngineRpm:F0}, rearK={v.Wheels[2].SlipRatio:F2}");
+        }
+        Console.WriteLine($"      (brake from {startKmh:F1} km/h: {t:F2} s, dt=1/120)");
+        Checks.Check(t <= 1.2, $"low-speed braking too slow: {t:F2} s");
     }
 
     private static double HeadingOf(Vehicle v)

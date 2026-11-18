@@ -190,7 +190,7 @@ public sealed class Vehicle
         // clutch state machine
         if (d.Clutch == ClutchState.Locked)
         {
-            bool stallThreat = d.EngineRpm < dc.IdleRpm * 0.75 && Throttle < 0.1;
+            bool stallThreat = d.EngineRpm < dc.IdleRpm * 0.5;
             bool parked = speed < 0.4 && Throttle < 0.05;
             if (d.Gear < 1 || stallThreat || parked) d.Clutch = ClutchState.Slipping;
         }
@@ -199,7 +199,7 @@ public sealed class Vehicle
             double expected = axleOmega * d.Ratio;
             double mismatch = Math.Abs(d.EngineOmega - expected);
             if ((Throttle > 0.02 && mismatch < 0.03 * Math.Max(d.EngineOmega, 5.0)) ||
-                (Throttle <= 0.02 && speed > 1.0))
+                (Throttle <= 0.02 && speed > 2.0))
             {
                 d.Clutch = ClutchState.Locked;
                 d.AxleOmega = axleOmega; // carry the wheels' current spin into the rigid state
@@ -218,10 +218,11 @@ public sealed class Vehicle
         else
         {
             // viscous clutch: T = K·Δω, clamped (power side full, coast side light).
-            // The idle governor drives the engine only — it never reaches the wheels.
+            // The idle governor drives the engine only — it never reaches the wheels,
+            // and a coasting/braking car gets no creep drive.
             double tEng = d.EngineTorque(Throttle);
             double transmit = 0.0;
-            if (d.Gear >= 1 && d.ShiftTimer <= 0 && !(Throttle <= 0.05 && speed < 1.0))
+            if (Throttle > 0.05 && d.Gear >= 1 && d.ShiftTimer <= 0)
             {
                 double mismatch = d.EngineOmega - axleOmega * gf;
                 transmit = Math.Clamp(60.0 * mismatch, -40.0, dc.ClutchCapacity);

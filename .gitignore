@@ -5,3 +5,4 @@ TestResults/
 *.user
 .godot/
 .DS_Store
+.godot/

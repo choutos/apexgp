@@ -1,0 +1,27 @@
+; Engine configuration file.
+; ApexGP — clean-room racing sim. This is the Godot shell: rendering, input, audio.
+; All simulation and game logic lives in ../src/ApexGP.Core (pure C#, headless-testable).
+
+config_version=5
+
+[application]
+
+config/name="ApexGP"
+run/main_scene="res://scenes/main.tscn"
+run/max_fps=60
+config/features=PackedStringArray("4.7", "C#")
+
+[dotnet]
+
+project/assembly_name="ApexGP.Game"
+
+[physics]
+
+common/physics_ticks_per_second=60
+3d/default_gravity=0.0
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/vram_compression/import_etc2_astc=true
