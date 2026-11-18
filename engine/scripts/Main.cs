@@ -49,14 +49,10 @@ public partial class Main : Node3D
     {
         var node = new CarController().WithVehicle(r.Car).WithPaint(paint);
         node.ExternalControl = true;
-        node.UseKeyboard = false;
+        node.UseKeyboard = r.IsPlayer; // set before _Ready so input/smoke hooks bind correctly
         AddChild(node);
         if (r.IsPlayer)
-        {
-            node.UseKeyboard = true;
-            node.ExternalControl = true; // the race steps everything, including the player
             _player = node;
-        }
         _carNodes.Add(node);
     }
 
