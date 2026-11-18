@@ -25,6 +25,9 @@ public static class Program
         Run("vehicle.idlesAtStandstill", VehicleDynamicsTests.IdlesAtStandstill);
         Run("vehicle.acceleratesTo100", VehicleDynamicsTests.AcceleratesTo100Kmh);
         Run("vehicle.brakesFrom100", VehicleDynamicsTests.BrakesFrom100Kmh);
+        Run("track.buildClosesLoop", TrackTests.Build_ClosesLoopAndMeasuresLength);
+        Run("track.gripModel", TrackTests.GripModel_OffTrackIsSlippery);
+        Run("track.botCompletesLaps", TrackTests.Bot_CompletesThreeLapsOnTrack);
         Run("vehicle.brakesFromLowSpeed", VehicleDynamicsTests.BrakesFromLowSpeed);
         Run("vehicle.steadyStateTopSpeed", VehicleDynamicsTests.SteadyStateTopSpeed);
         Run("vehicle.cornering", VehicleDynamicsTests.CorneringSteersAndStaysSane);

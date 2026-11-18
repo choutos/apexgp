@@ -16,6 +16,8 @@ public partial class CarController : Node3D
 
     public Vehicle Sim => _vehicle;
 
+    public void SetSurface(ITrackSurface surface) => _vehicle.Surface = surface;
+
     /// <summary>0..1. Set directly for tests; otherwise read from input.</summary>
     public double ThrottleInput { get; set; }
     public double BrakeInput { get; set; }

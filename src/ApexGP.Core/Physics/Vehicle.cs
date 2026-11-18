@@ -23,6 +23,10 @@ public sealed class Vehicle
     public double Throttle;              // 0..1
     public double Brake;                 // 0..1
 
+    /// <summary>Optional track surface providing grip multipliers. Null = flat tarmac everywhere.</summary>
+    public ITrackSurface? Surface;
+    private int _surfaceIdx = -1;
+
     public bool Diverged { get; private set; }
 
     private const double AirDensity = 1.22;
@@ -296,7 +300,13 @@ public sealed class Vehicle
             w.SlipRatio = kappa;
             w.SlipAngleDeg = alphaDeg;
 
-            var (fx, fy) = TireModel.Combined(w.SmoothedKappa, w.SmoothedAlphaDeg, w.ContactLoad, Config.TireMuBase);
+            double muScale = 1.0;
+            if (Surface != null)
+            {
+                _surfaceIdx = Surface.NearestIndex(cp.X, cp.Z, _surfaceIdx);
+                muScale = Surface.GripMultiplierAt(_surfaceIdx, cp.X, cp.Z);
+            }
+            var (fx, fy) = TireModel.Combined(w.SmoothedKappa, w.SmoothedAlphaDeg, w.ContactLoad, Config.TireMuBase * muScale);
             // Lateral: Fy opposes slip (positive slip = sliding +side, force acts -side).
             fy = -fy;
             w.TireFx = fx;
