@@ -1,0 +1,7 @@
+bin/
+obj/
+artifacts/
+TestResults/
+*.user
+.godot/
+.DS_Store
