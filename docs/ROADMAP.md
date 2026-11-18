@@ -30,6 +30,14 @@ Pure C#, headless, unit-tested.
 - Dealership (new + used with condition/mileage) and tuning shop
   (engine stages, turbo, gearing, LSD, weight reduction, aero)
 
-## M3 — Content + polish
-- 10+ cars across classes, 3+ tracks, engine audio synthesis
-- Menu flow, save system, packaging + CI (GitHub Actions)
+## M3 — Content + polish (current)
+- [x] Procedural engine audio (RPM-pitched synthesis)
+- [ ] PS1-style visual polish pass (low-poly detail, dithering, higher cars)
+- [ ] More cars across classes, second circuit content
+- [ ] Gamepad force feedback tuning
+
+## Done
+- M0 (sim core, 12 tests) — see git history
+- M0.5 (Godot shell) — see git history
+- M1a (track pipeline) / M1b (race mode) — see git history
+- M2a (career: dealership, tuning, licences, events) — see git history

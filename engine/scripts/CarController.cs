@@ -58,6 +58,52 @@ public partial class CarController : Node3D
     private double _smokeT;
     private int _smokePhase;
     private bool _smokeMode;
+    private AudioStreamPlayer? _engineSound;
+
+    /// <summary>Procedural engine audio: a synthesized firing-order loop, pitch-tracked to RPM.</summary>
+    private void BuildEngineAudio()
+    {
+        // 4-cylinder firing loop: ~6 pulses per rev, 480 samples @ 11025 Hz = 43 ms loop
+        const int SampleRate = 11025;
+        const int Samples = 480;
+        var data = new byte[Samples * 2];
+        for (int i = 0; i < Samples; i++)
+        {
+            double ph = (double)i / Samples * 6.0 * System.Math.PI;
+            double v = 0.72 * System.Math.Sin(ph) + 0.28 * System.Math.Sin(3 * ph) + 0.14 * System.Math.Sin(5 * ph);
+            short s16 = (short)(System.Math.Clamp(v, -1, 1) * 12000);
+            data[i * 2] = (byte)(s16 & 0xFF);
+            data[i * 2 + 1] = (byte)((s16 >> 8) & 0xFF);
+        }
+        _engineSound = new AudioStreamPlayer
+        {
+            Stream = new AudioStreamWav
+            {
+                Format = AudioStreamWav.FormatEnum.Format16Bits,
+                MixRate = SampleRate,
+                Stereo = false,
+                LoopMode = AudioStreamWav.LoopModeEnum.Forward,
+                LoopBegin = 0,
+                LoopEnd = Samples,
+                Data = data,
+            },
+            VolumeDb = -14f,
+        };
+        AddChild(_engineSound);
+        _engineSound.Play();
+    }
+
+    private void UpdateEngineAudio()
+    {
+        if (_engineSound == null) return;
+        bool playerCar = UseKeyboard; // only the player car sings
+        _engineSound.StreamPaused = !playerCar;
+        if (!playerCar) return;
+        double rpm = Sim.EngineRpm;
+        double t = System.Math.Clamp(rpm / Sim.Config.Drivetrain.RedlineRpm, 0, 1.2);
+        _engineSound.PitchScale = (float)(0.55 + t * 2.6);
+        _engineSound.VolumeDb = (float)(-16 + ThrottleInput * 9 + t * 6);
+    }
 
     public override void _Ready()
     {
@@ -65,6 +111,7 @@ public partial class CarController : Node3D
         _vehicle.Position = new System.Numerics.Vector3(0f, 1.0f, 0f);
         BuildBody();
         BuildWheels();
+        BuildEngineAudio();
         WithPaint(_paint);
         _smokeMode = UseKeyboard && OS.GetEnvironment("APEXGP_SMOKE") == "1";
         if (_smokeMode)
@@ -200,6 +247,7 @@ public partial class CarController : Node3D
         }
 
         ApplySimToScene(delta);
+        UpdateEngineAudio();
     }
 
     private double _accum;
