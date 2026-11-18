@@ -6,14 +6,25 @@ using ApexGP.Core;
 namespace ApexGP.Game;
 
 /// <summary>
-/// Game shell root: builds the world (ground, sky, light), spawns the player car,
-/// drives the chase camera and the HUD. All sim state lives in ApexGP.Core.
+/// Game shell root: owns the world (track visuals, sky), the race lifecycle, the
+/// chase camera and the HUD. All sim/game state lives in ApexGP.Core.
 /// </summary>
 public partial class Main : Node3D
 {
     private CarController _player = null!;
     private readonly List<CarController> _carNodes = new();
-    private RaceController _race = null!;
+    private RaceController? _race;
+    private EventDef? _activeEvent;
+    private bool _resultsShown;
+    private CareerUi? _careerUi;
+    private CareerProfile _profile = null!;
+
+    private LicenseRun? _licenceRun;
+    private Vehicle? _licenceCar;
+    private LicenseTestDef? _licenceDef;
+    private double _licAccum;
+    private double _raceTimerOffset;
+
     private Camera3D _camera = null!;
     private Label _speedLabel = null!;
     private Label _gearLabel = null!;
@@ -22,42 +33,158 @@ public partial class Main : Node3D
     private Label _posLabel = null!;
     private Label _messageLabel = null!;
     private string _lastMessage = "";
+    private readonly bool _smoke = false;
+
+    public TrackSurface Track = null!;
+    private bool _hudVisible = true;
 
     public override void _Ready()
     {
         BuildWorld();
-
-        // Grid: player P1, then two AI cars
-        var aiFast = new RacingLineFollower(Track) { SpeedFactor = 0.94 };
-        var aiSlow = new RacingLineFollower(Track) { SpeedFactor = 0.88 };
-        _race = new RaceController(Track, laps: 2);
-        var p = _race.AddRacer("YOU", VehicleConfig.PrototypeGtB(), isPlayer: true, ai: null, lateralOffset: 3.0);
-        var a1 = _race.AddRacer("K. Tanaka", VehicleConfig.PrototypeGtB(), isPlayer: false, ai: aiFast, lateralOffset: -3.0);
-        var a2 = _race.AddRacer("M. Kowalski", VehicleConfig.PrototypeGtB(), isPlayer: false, ai: aiSlow, lateralOffset: 3.0);
-
-        Spawn(p, new Color(0.78f, 0.16f, 0.12f));
-        Spawn(a1, new Color(0.16f, 0.38f, 0.82f));
-        Spawn(a2, new Color(0.88f, 0.88f, 0.86f));
-
-        _camera = new Camera3D { Fov = 68f, Current = true };
-        AddChild(_camera);
-
         BuildHud();
+        _profile = CareerProfile.Load(CareerUi.UserProfilePath);
+
+        if (OS.GetEnvironment("APEXGP_SMOKE") == "1")
+        {
+            // CI path: straight into a 3-car race, driven by the env autopilot
+            var ev = EventCalendar.ById("sunriseCup1");
+            _profile = CareerProfile.New();
+            _profile.Credits = 50000;
+            Career.BuyCar(_profile, CarSpec.ById("circuit1600"));
+            StartEvent(_profile, ev);
+            return;
+        }
+
+        _careerUi = new CareerUi();
+        AddChild(_careerUi);
     }
 
-    private void Spawn(Racer r, Color paint)
+    // ---------- race lifecycle ----------
+
+    private void TeardownRace()
     {
-        var node = new CarController().WithVehicle(r.Car).WithPaint(paint);
-        node.ExternalControl = true;
-        node.UseKeyboard = r.IsPlayer; // set before _Ready so input/smoke hooks bind correctly
-        AddChild(node);
-        if (r.IsPlayer)
-            _player = node;
-        _carNodes.Add(node);
+        foreach (var n in _carNodes) n.QueueFree();
+        _carNodes.Clear();
+        _race = null;
+        _activeEvent = null;
+        _resultsShown = false;
+        _licenceRun = null;
+        _licenceCar = null;
+        _licenceDef = null;
     }
+
+    public void StartEvent(CareerProfile profile, EventDef ev)
+    {
+        TeardownRace();
+        _activeEvent = ev;
+        _race = Career.StartEvent(profile, ev, Track, Career.ConfigFor(profile), playerIsAi: false);
+        var paints = new[] { new Color(0.78f, 0.16f, 0.12f), new Color(0.16f, 0.38f, 0.82f),
+                             new Color(0.88f, 0.88f, 0.86f), new Color(0.95f, 0.6f, 0.1f), new Color(0.2f, 0.7f, 0.3f) };
+        for (int i = 0; i < _race.Racers.Count; i++)
+        {
+            var node = new CarController().WithVehicle(_race.Racers[i].Car).WithPaint(paints[i % paints.Length]);
+            node.ExternalControl = true;
+            node.UseKeyboard = _race.Racers[i].IsPlayer;
+            AddChild(node);
+            _carNodes.Add(node);
+            if (_race.Racers[i].IsPlayer)
+                _player = node;
+        }
+        _hudVisible = true;
+        SetHudVisible(true);
+        _careerUi?.SetRaceVisible(false);
+    }
+
+    public void StartLicenseTest(LicenseTestDef def)
+    {
+        TeardownRace();
+        var cfg = Career.ConfigFor(_profile);
+        _licenceCar = new Vehicle(cfg);
+        var s = Track.Samples[0];
+        _licenceCar.Position = new System.Numerics.Vector3((float)(s.X + s.RightX * 3), 1.0f, (float)(s.Z + s.RightZ * 3));
+        _licenceCar.Orientation = System.Numerics.Quaternion.CreateFromAxisAngle(
+            System.Numerics.Vector3.UnitY, (float)System.Math.Atan2(-s.DirX, -s.DirZ));
+        _licenceCar.Surface = Track;
+        _licenceRun = new LicenseRun(Track, def);
+
+        var node = new CarController().WithVehicle(_licenceCar).WithPaint(new Color(0.78f, 0.16f, 0.12f));
+        node.ExternalControl = true;
+        node.UseKeyboard = true;
+        AddChild(node);
+        _carNodes.Add(node);
+        _player = node; // the human drives the licence test
+        _licenceDef = def;
+        SetHudVisible(true);
+        SetMessage("LICENCE TEST — through every gate in time!");
+        _careerUi?.SetRaceVisible(false);
+    }
+
+    private void GrantLicence(LicenseTestDef def)
+    {
+        _profile.Licenses.Add(def.Id);
+        _profile.Save(CareerUi.UserProfilePath);
+        SetMessage($"{def.Name} EARNED!");
+        TeardownRace();
+        _careerUi?.ShowScreen(CareerUi.Screen.Licences);
+        _careerUi?.SetRaceVisible(false);
+    }
+
+    public void SetRaceVisible(bool visible)
+    {
+        // menus overlay the 3D world; nothing to hide but HUD state
+        SetHudVisible(visible);
+    }
+
+    private void SetHudVisible(bool visible)
+    {
+        _hudVisible = visible;
+        if (_speedLabel == null) return;
+        _speedLabel.Visible = visible;
+        _gearLabel.Visible = visible;
+        _rpmLabel.Visible = visible;
+        _lapLabel.Visible = visible;
+        _posLabel.Visible = visible;
+    }
+
+    private void SetMessage(string text)
+    {
+        _messageLabel.Text = text;
+        _lastMessage = text;
+    }
+
+    // ---------- per-frame ----------
 
     public override void _PhysicsProcess(double delta)
     {
+        if (_licenceRun != null && _licenceCar != null)
+        {
+            // human-driven licence test
+            _player.PollInput();
+            _licenceCar.Throttle = _player.ThrottleInput;
+            _licenceCar.Brake = _player.BrakeInput;
+            _licenceCar.SteerInput = _player.SteerInput;
+            const double StepDt = 1.0 / 120.0;
+            _licAccum += System.Math.Min(delta, 0.1);
+            while (_licAccum >= StepDt)
+            {
+                _licenceCar.Step(StepDt);
+                _licenceRun.Tick(_licenceCar, StepDt);
+                _licAccum -= StepDt;
+            }
+            if (_licenceRun.AllPassed && _licenceDef != null)
+                GrantLicence(_licenceDef);
+            else if (_licenceRun.TimeExpired)
+            {
+                SetMessage("TIME UP — try again from the licence menu");
+                _licenceRun = null;
+                TeardownRace();
+                _careerUi?.ShowScreen(CareerUi.Screen.Licences);
+            }
+            return;
+        }
+
+        if (_race == null) return;
+
         if (_race.Phase is RacePhase.Formation or RacePhase.Racing)
         {
             _player.PollInput();
@@ -65,17 +192,70 @@ public partial class Main : Node3D
         }
         else
         {
-            // freeze inputs after the flag
             _player.ThrottleInput = 0;
             _player.BrakeInput = 0.6;
             _race.Step(delta, (_player.ThrottleInput, _player.BrakeInput, 0));
         }
+
+        if (_race.Phase == RacePhase.Finished && !_resultsShown && _activeEvent != null)
+        {
+            _resultsShown = true;
+            var (prize, pos) = Career.CollectPrize(_profile, _activeEvent, _race);
+            _profile.Save(CareerUi.UserProfilePath);
+            _careerUi?.ShowResults(_activeEvent, _race, prize, pos);
+        }
     }
 
+    public override void _Process(double delta)
+    {
+        if (_carNodes.Count == 0 || _player == null) return;
+        ChaseCamera(delta);
+
+        if (!_hudVisible) return;
+        var sim = _player.Sim;
+        Racer? racer = null;
+        if (_race != null) racer = _race.Racers.FirstOrDefault(r => r.IsPlayer);
+
+        _speedLabel.Text = $"{sim.SpeedKmh:F0} km/h";
+        _gearLabel.Text = sim.Gear >= 1 ? $"Gear {sim.Gear}" : "N";
+        var rpm = sim.EngineRpm / sim.Config.Drivetrain.RedlineRpm;
+        var bar = new string('█', (int)(rpm * 20)).PadRight(20, '·');
+        _rpmLabel.Text = $"{bar} {sim.EngineRpm:F0} rpm";
+        if (racer != null && _licenceRun == null)
+        {
+            _lapLabel.Text = racer.Laps == 0
+                ? $"Lap 1 — {racer.Timer.CurrentLapTime:F2}s"
+                : $"Lap {racer.Laps + 1} — {racer.Timer.CurrentLapTime:F2}s   (best {racer.Timer.BestLap:F2}s)";
+            _posLabel.Text = $"P{racer.Position}/{_race!.Racers.Count}";
+
+            string msg = _race.Phase switch
+            {
+                RacePhase.Formation => "GET READY...",
+                RacePhase.Racing when racer.Laps < _race.Laps => "",
+                _ => racer.Position <= 3 ? $"FINISH — P{racer.Position}!" : "FINISH"
+            };
+            if (msg != _lastMessage) SetMessage(msg);
+        }
+        else if (_licenceRun != null && _licenceRun.FinishTime < double.MaxValue)
+        {
+            _lapLabel.Text = $"Gates {_licenceRun.GatesPassed} — {_licenceRun.Elapsed:F1}s";
+        }
+    }
+
+    private void ChaseCamera(double delta)
+    {
+        var carPos = _player.GlobalPosition;
+        var back = -_player.GlobalTransform.Basis.Z;
+        var target = carPos - back * 5.2f + Vector3.Up * 2.3f;
+        var k = 1f - Mathf.Exp((float)-(6.0 * delta));
+        _camera.GlobalPosition = _camera.GlobalPosition.Lerp(target, k);
+        _camera.LookAt(carPos + Vector3.Up * 0.9f, Vector3.Up);
+    }
+
+    // ---------- world ----------
 
     private void BuildWorld()
     {
-        // Sky
         var env = new WorldEnvironment
         {
             Environment = new Godot.Environment
@@ -92,7 +272,6 @@ public partial class Main : Node3D
         };
         AddChild(env);
 
-        // Sun
         var sun = new DirectionalLight3D
         {
             RotationDegrees = new Vector3(-42f, 35f, 0f),
@@ -101,13 +280,9 @@ public partial class Main : Node3D
         };
         AddChild(sun);
 
-        // Grass everywhere; the track ribbon sits on top
         var ground = new MeshInstance3D
         {
-            Mesh = new PlaneMesh
-            {
-                Size = new Vector2(900f, 900f),
-            },
+            Mesh = new PlaneMesh { Size = new Vector2(900f, 900f) },
         };
         ground.MaterialOverride = new StandardMaterial3D
         {
@@ -117,138 +292,54 @@ public partial class Main : Node3D
         ground.Position = new Vector3(150f, 0f, -120f);
         AddChild(ground);
 
-        // Track (Core geometry → visuals) and register it as the driving surface
         Track = TrackCatalog.SunriseLoop();
         AddChild(TrackMesh.Build(Track));
-    }
 
-    public TrackSurface Track = null!;
+        _camera = new Camera3D { Fov = 68f, Current = true };
+        AddChild(_camera);
+    }
 
     private void BuildHud()
     {
         var layer = new CanvasLayer();
         AddChild(layer);
-
         var font = ThemeDB.FallbackFont;
-        _speedLabel = new Label
+
+        Label Mk(string text, Vector2 pos, int size, Color color)
         {
-            Position = new Vector2(24f, 24f),
-            LabelSettings = new LabelSettings
+            return new Label
             {
-                Font = font,
-                FontSize = 42,
-                FontColor = Colors.White,
-                OutlineSize = 6,
-                OutlineColor = new Color(0.05f, 0.1f, 0.22f),
-            },
-        };
+                Position = pos,
+                Text = text,
+                LabelSettings = new LabelSettings
+                {
+                    Font = font, FontSize = size, FontColor = color,
+                    OutlineSize = size / 5, OutlineColor = new Color(0.05f, 0.1f, 0.22f),
+                },
+            };
+        }
+
+        _speedLabel = Mk("", new Vector2(24f, 24f), 42, Colors.White);
+        _gearLabel = Mk("", new Vector2(24f, 72f), 24, new Color(0.85f, 0.9f, 1f));
+        _rpmLabel = Mk("", new Vector2(24f, 104f), 18, new Color(1f, 0.75f, 0.3f));
+        _lapLabel = Mk("", new Vector2(24f, 132f), 20, new Color(0.9f, 0.95f, 1f));
+        _posLabel = Mk("", new Vector2(24f, 162f), 34, new Color(1f, 0.95f, 0.6f));
         layer.AddChild(_speedLabel);
-
-        _gearLabel = new Label
-        {
-            Position = new Vector2(24f, 72f),
-            LabelSettings = new LabelSettings
-            {
-                Font = font,
-                FontSize = 24,
-                FontColor = new Color(0.85f, 0.9f, 1f),
-                OutlineSize = 4,
-                OutlineColor = new Color(0.05f, 0.1f, 0.22f),
-            },
-        };
         layer.AddChild(_gearLabel);
-
-        _rpmLabel = new Label
-        {
-            Position = new Vector2(24f, 104f),
-            LabelSettings = new LabelSettings
-            {
-                Font = font,
-                FontSize = 18,
-                FontColor = new Color(1f, 0.75f, 0.3f),
-                OutlineSize = 4,
-                OutlineColor = new Color(0.05f, 0.1f, 0.22f),
-            },
-        };
         layer.AddChild(_rpmLabel);
-
-        _lapLabel = new Label
-        {
-            Position = new Vector2(24f, 132f),
-            LabelSettings = new LabelSettings
-            {
-                Font = font,
-                FontSize = 20,
-                FontColor = new Color(0.9f, 0.95f, 1f),
-                OutlineSize = 4,
-                OutlineColor = new Color(0.05f, 0.1f, 0.22f),
-            },
-        };
         layer.AddChild(_lapLabel);
-
-        _posLabel = new Label
-        {
-            Position = new Vector2(24f, 162f),
-            LabelSettings = new LabelSettings
-            {
-                Font = font,
-                FontSize = 34,
-                FontColor = new Color(1f, 0.95f, 0.6f),
-                OutlineSize = 6,
-                OutlineColor = new Color(0.05f, 0.1f, 0.22f),
-            },
-        };
         layer.AddChild(_posLabel);
 
         _messageLabel = new Label
         {
-            // centered top
             AnchorLeft = 0f, AnchorRight = 1f, AnchorTop = 0.14f, AnchorBottom = 0.14f,
             HorizontalAlignment = HorizontalAlignment.Center,
             LabelSettings = new LabelSettings
             {
-                Font = font,
-                FontSize = 52,
-                FontColor = new Color(1f, 0.9f, 0.25f),
-                OutlineSize = 10,
-                OutlineColor = new Color(0.05f, 0.08f, 0.2f),
+                Font = font, FontSize = 52, FontColor = new Color(1f, 0.9f, 0.25f),
+                OutlineSize = 10, OutlineColor = new Color(0.05f, 0.08f, 0.2f),
             },
         };
         layer.AddChild(_messageLabel);
-    }
-
-    public override void _Process(double delta)
-    {
-        // Chase camera: behind and above the player car, smoothed.
-        var carPos = _player.GlobalPosition;
-        var back = -_player.GlobalTransform.Basis.Z; // car forward is -Z
-        var target = carPos - back * 5.2f + Vector3.Up * 2.3f;
-        var k = 1f - Mathf.Exp((float)-(6.0 * delta));
-        _camera.GlobalPosition = _camera.GlobalPosition.Lerp(target, k);
-        _camera.LookAt(carPos + Vector3.Up * 0.9f, Vector3.Up);
-
-        var sim = _player.Sim;
-        var racer = _race.Racers.First(r => r.IsPlayer);
-        _speedLabel.Text = $"{sim.SpeedKmh:F0} km/h";
-        _gearLabel.Text = sim.Gear >= 1 ? $"Gear {sim.Gear}   {sim.Drivetrain.Clutch}" : "N";
-        var rpm = sim.EngineRpm / sim.Config.Drivetrain.RedlineRpm;
-        var bar = new string('█', (int)(rpm * 20)).PadRight(20, '·');
-        _rpmLabel.Text = $"{bar} {sim.EngineRpm:F0} rpm";
-        _lapLabel.Text = racer.Laps == 0
-            ? $"Lap 1 — {racer.Timer.CurrentLapTime:F2}s"
-            : $"Lap {racer.Laps + 1} — {racer.Timer.CurrentLapTime:F2}s   (best {racer.Timer.BestLap:F2}s)";
-        _posLabel.Text = $"P{racer.Position}/{_race.Racers.Count}";
-
-        string msg = _race.Phase switch
-        {
-            RacePhase.Formation => "GET READY...",
-            RacePhase.Racing when racer.Laps < _race.Laps => "",
-            _ => racer.Position <= 3 ? $"FINISH — P{racer.Position}!" : "FINISH"
-        };
-        if (msg != _lastMessage)
-        {
-            _messageLabel.Text = msg;
-            _lastMessage = msg;
-        }
     }
 }

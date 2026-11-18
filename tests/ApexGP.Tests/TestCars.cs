@@ -42,4 +42,22 @@ public static class Checks
         Check(Math.Abs(actual - expected) <= tolerance,
               $"{what}: expected {expected:F3} ± {tolerance:F3}, got {actual:F3}");
     }
+
+    public static void Throws<T>(Action action) where T : Exception
+    {
+        try
+        {
+            action();
+        }
+        catch (T)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            Check(false, $"expected {typeof(T).Name}, got {ex.GetType().Name}: {ex.Message}");
+            return;
+        }
+        Check(false, $"expected {typeof(T).Name} but nothing was thrown");
+    }
 }

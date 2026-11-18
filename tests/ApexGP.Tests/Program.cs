@@ -29,6 +29,11 @@ public static class Program
         Run("track.gripModel", TrackTests.GripModel_OffTrackIsSlippery);
         Run("track.botCompletesLaps", TrackTests.Bot_CompletesThreeLapsOnTrack);
         Run("race.threeCarCompletes", RaceTests.ThreeCarRace_CompletesWithSaneOrdering);
+        Run("career.buyTuneConfig", CareerTests.BuyTuneAndInspectConfig);
+        Run("career.buyRejectsWhenBroke", CareerTests.BuyRejectsWhenBroke);
+        Run("career.eventEntryAndRace", CareerTests.EventEntryRequiresLicenseAndFunds);
+        Run("career.licenceRun", CareerTests.LicenseRun_PassesWithBot);
+        Run("career.profileRoundTrip", CareerTests.ProfileRoundTrip);
         Run("vehicle.brakesFromLowSpeed", VehicleDynamicsTests.BrakesFromLowSpeed);
         Run("vehicle.steadyStateTopSpeed", VehicleDynamicsTests.SteadyStateTopSpeed);
         Run("vehicle.cornering", VehicleDynamicsTests.CorneringSteersAndStaysSane);
