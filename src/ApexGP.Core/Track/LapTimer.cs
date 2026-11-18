@@ -15,6 +15,7 @@ public sealed class LapTimer
     public int LapsCompleted { get; private set; }
     public double BestLap { get; private set; } = double.MaxValue;
     public double CurrentLapTime => _now - _lapStart;
+    public int CurrentIndex => _lastIdx;
 
     public LapTimer(TrackSurface track)
     {

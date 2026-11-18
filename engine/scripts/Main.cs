@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using Godot;
 using ApexGP.Core;
 
@@ -9,40 +11,71 @@ namespace ApexGP.Game;
 /// </summary>
 public partial class Main : Node3D
 {
-    private CarController _car = null!;
+    private CarController _player = null!;
+    private readonly List<CarController> _carNodes = new();
+    private RaceController _race = null!;
     private Camera3D _camera = null!;
     private Label _speedLabel = null!;
     private Label _gearLabel = null!;
     private Label _rpmLabel = null!;
     private Label _lapLabel = null!;
+    private Label _posLabel = null!;
+    private Label _messageLabel = null!;
+    private string _lastMessage = "";
 
     public override void _Ready()
     {
         BuildWorld();
-        _car = new CarController();
-        AddChild(_car);
 
-        // spawn on the start line, one lane right of centre, facing along the track
-        var start = Track.Samples[0];
-        _car.Sim.Position = new System.Numerics.Vector3(
-            (float)(start.X + start.RightX * 3.0), 1.0f, (float)(start.Z + start.RightZ * 3.0));
-        double yaw = System.Math.Atan2(-start.DirX, -start.DirZ);
-        _car.Sim.Orientation = System.Numerics.Quaternion.CreateFromAxisAngle(System.Numerics.Vector3.UnitY, (float)yaw);
-        _car.SetSurface(Track);
-        _timer = new LapTimer(Track);
+        // Grid: player P1, then two AI cars
+        var aiFast = new RacingLineFollower(Track) { SpeedFactor = 0.94 };
+        var aiSlow = new RacingLineFollower(Track) { SpeedFactor = 0.88 };
+        _race = new RaceController(Track, laps: 2);
+        var p = _race.AddRacer("YOU", VehicleConfig.PrototypeGtB(), isPlayer: true, ai: null, lateralOffset: 3.0);
+        var a1 = _race.AddRacer("K. Tanaka", VehicleConfig.PrototypeGtB(), isPlayer: false, ai: aiFast, lateralOffset: -3.0);
+        var a2 = _race.AddRacer("M. Kowalski", VehicleConfig.PrototypeGtB(), isPlayer: false, ai: aiSlow, lateralOffset: 3.0);
 
-        _camera = new Camera3D
-        {
-            Fov = 68f,
-            Current = true,
-        };
-        _camera.GlobalPosition = _car.GlobalPosition - _car.GlobalTransform.Basis.Z * 6f + Vector3.Up * 3f;
+        Spawn(p, new Color(0.78f, 0.16f, 0.12f));
+        Spawn(a1, new Color(0.16f, 0.38f, 0.82f));
+        Spawn(a2, new Color(0.88f, 0.88f, 0.86f));
+
+        _camera = new Camera3D { Fov = 68f, Current = true };
         AddChild(_camera);
 
         BuildHud();
     }
 
-    private LapTimer _timer;
+    private void Spawn(Racer r, Color paint)
+    {
+        var node = new CarController().WithVehicle(r.Car).WithPaint(paint);
+        node.ExternalControl = true;
+        node.UseKeyboard = false;
+        AddChild(node);
+        if (r.IsPlayer)
+        {
+            node.UseKeyboard = true;
+            node.ExternalControl = true; // the race steps everything, including the player
+            _player = node;
+        }
+        _carNodes.Add(node);
+    }
+
+    public override void _PhysicsProcess(double delta)
+    {
+        if (_race.Phase is RacePhase.Formation or RacePhase.Racing)
+        {
+            _player.PollInput();
+            _race.Step(delta, (_player.ThrottleInput, _player.BrakeInput, _player.SteerInput));
+        }
+        else
+        {
+            // freeze inputs after the flag
+            _player.ThrottleInput = 0;
+            _player.BrakeInput = 0.6;
+            _race.Step(delta, (_player.ThrottleInput, _player.BrakeInput, 0));
+        }
+    }
+
 
     private void BuildWorld()
     {
@@ -156,28 +189,70 @@ public partial class Main : Node3D
             },
         };
         layer.AddChild(_lapLabel);
+
+        _posLabel = new Label
+        {
+            Position = new Vector2(24f, 162f),
+            LabelSettings = new LabelSettings
+            {
+                Font = font,
+                FontSize = 34,
+                FontColor = new Color(1f, 0.95f, 0.6f),
+                OutlineSize = 6,
+                OutlineColor = new Color(0.05f, 0.1f, 0.22f),
+            },
+        };
+        layer.AddChild(_posLabel);
+
+        _messageLabel = new Label
+        {
+            // centered top
+            AnchorLeft = 0f, AnchorRight = 1f, AnchorTop = 0.14f, AnchorBottom = 0.14f,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            LabelSettings = new LabelSettings
+            {
+                Font = font,
+                FontSize = 52,
+                FontColor = new Color(1f, 0.9f, 0.25f),
+                OutlineSize = 10,
+                OutlineColor = new Color(0.05f, 0.08f, 0.2f),
+            },
+        };
+        layer.AddChild(_messageLabel);
     }
 
     public override void _Process(double delta)
     {
-        _timer.Tick(_car.Sim, delta);
-
-        // Chase camera: behind and above the car, smoothed.
-        var carPos = _car.GlobalPosition;
-        var back = -_car.GlobalTransform.Basis.Z; // car forward is -Z
+        // Chase camera: behind and above the player car, smoothed.
+        var carPos = _player.GlobalPosition;
+        var back = -_player.GlobalTransform.Basis.Z; // car forward is -Z
         var target = carPos - back * 5.2f + Vector3.Up * 2.3f;
         var k = 1f - Mathf.Exp((float)-(6.0 * delta));
         _camera.GlobalPosition = _camera.GlobalPosition.Lerp(target, k);
         _camera.LookAt(carPos + Vector3.Up * 0.9f, Vector3.Up);
 
-        var sim = _car.Sim;
+        var sim = _player.Sim;
+        var racer = _race.Racers.First(r => r.IsPlayer);
         _speedLabel.Text = $"{sim.SpeedKmh:F0} km/h";
         _gearLabel.Text = sim.Gear >= 1 ? $"Gear {sim.Gear}   {sim.Drivetrain.Clutch}" : "N";
         var rpm = sim.EngineRpm / sim.Config.Drivetrain.RedlineRpm;
         var bar = new string('█', (int)(rpm * 20)).PadRight(20, '·');
         _rpmLabel.Text = $"{bar} {sim.EngineRpm:F0} rpm";
-        _lapLabel.Text = _timer.LapsCompleted == 0
-            ? $"Lap 1 — {_timer.CurrentLapTime:F2}s"
-            : $"Lap {_timer.LapsCompleted + 1} — {_timer.CurrentLapTime:F2}s   (best {_timer.BestLap:F2}s)";
+        _lapLabel.Text = racer.Laps == 0
+            ? $"Lap 1 — {racer.Timer.CurrentLapTime:F2}s"
+            : $"Lap {racer.Laps + 1} — {racer.Timer.CurrentLapTime:F2}s   (best {racer.Timer.BestLap:F2}s)";
+        _posLabel.Text = $"P{racer.Position}/{_race.Racers.Count}";
+
+        string msg = _race.Phase switch
+        {
+            RacePhase.Formation => "GET READY...",
+            RacePhase.Racing when racer.Laps < _race.Laps => "",
+            _ => racer.Position <= 3 ? $"FINISH — P{racer.Position}!" : "FINISH"
+        };
+        if (msg != _lastMessage)
+        {
+            _messageLabel.Text = msg;
+            _lastMessage = msg;
+        }
     }
 }

@@ -11,12 +11,41 @@ namespace ApexGP.Game;
 public partial class CarController : Node3D
 {
     private Vehicle _vehicle = null!;
+    private Vehicle? _injected;
     private readonly Node3D[] _wheels = new Node3D[4];
     private readonly float[] _wheelRollAngle = new float[4];
+    private MeshInstance3D? _bodyMesh;
+
+    /// <summary>When true, an external RaceController steps this vehicle.</summary>
+    public bool ExternalControl { get; set; }
+
+    public CarController WithVehicle(Vehicle v)
+    {
+        _injected = v;
+        return this;
+    }
+
+    public CarController WithPaint(Color c)
+    {
+        _paint = c;
+        if (_bodyMesh != null)
+            _bodyMesh.MaterialOverride = new StandardMaterial3D
+            {
+                AlbedoColor = c,
+                Roughness = 0.35f,
+                Metallic = 0.4f,
+            };
+        return this;
+    }
+
+    private Color _paint = new(0.78f, 0.16f, 0.12f);
 
     public Vehicle Sim => _vehicle;
 
     public void SetSurface(ITrackSurface surface) => _vehicle.Surface = surface;
+
+    /// <summary>Public entry so the shell can feed inputs before the race steps.</summary>
+    public void PollInput() => ReadInput();
 
     /// <summary>0..1. Set directly for tests; otherwise read from input.</summary>
     public double ThrottleInput { get; set; }
@@ -32,11 +61,12 @@ public partial class CarController : Node3D
 
     public override void _Ready()
     {
-        _vehicle = new Vehicle(VehicleConfig.PrototypeGtB());
+        _vehicle = _injected ?? new Vehicle(VehicleConfig.PrototypeGtB());
         _vehicle.Position = new System.Numerics.Vector3(0f, 1.0f, 0f);
         BuildBody();
         BuildWheels();
-        _smokeMode = OS.GetEnvironment("APEXGP_SMOKE") == "1";
+        WithPaint(_paint);
+        _smokeMode = UseKeyboard && OS.GetEnvironment("APEXGP_SMOKE") == "1";
         if (_smokeMode)
         {
             UseKeyboard = false;
@@ -117,36 +147,44 @@ public partial class CarController : Node3D
         if (_smokeMode)
         {
             _smokeT += delta;
-            if (_smokePhase == 0)
+            switch (_smokePhase)
             {
-                ThrottleInput = 1.0; BrakeInput = 0;
-                if (_smokeT >= 1.5)
-                {
-                    GD.Print($"APEXGP_SMOKE accel={Sim.SpeedKmh:F2} thr={ThrottleInput:F2} y={Sim.Position.Y:F3} gear={Sim.Gear}");
-                    _smokePhase = 1;
-                }
-                else if (System.Math.Abs(_smokeT - System.Math.Round(_smokeT * 2) / 2.0) < delta / 2)
-                {
-                    GD.Print($"APEXGP_SMOKE t={_smokeT:F2} kmh={Sim.SpeedKmh:F2} thr={ThrottleInput:F2} rpm={Sim.EngineRpm:F0} clutch={Sim.Drivetrain.Clutch} y={Sim.Position.Y:F3}");
-                }
-            }
-            else
-            {
-                ThrottleInput = 0; BrakeInput = 1;
-                if (_smokeT >= 3.6 && _smokePhase == 1)
-                {
-                    GD.Print($"APEXGP_SMOKE brake={Sim.SpeedKmh:F2} thr={ThrottleInput:F2} brk={BrakeInput:F2}");
-                    _smokePhase = 2;
-                }
-                else if (_smokePhase == 2 && System.Math.Abs(_smokeT - System.Math.Round(_smokeT * 2) / 2.0) < delta / 2)
-                {
-                    GD.Print($"APEXGP_SMOKE t={_smokeT:F2} kmh={Sim.SpeedKmh:F2} thr={ThrottleInput:F2} brk={BrakeInput:F2} kB={Sim.Wheels[2].SlipRatio:F2}");
-                }
+                case 0: // wait for the green flag
+                    ThrottleInput = 0; BrakeInput = 0;
+                    if (_smokeT >= 1.4) _smokePhase = 1;
+                    break;
+                case 1: // full throttle for 3 s of racing
+                    ThrottleInput = 1.0; BrakeInput = 0;
+                    if (_smokeT >= 4.6)
+                    {
+                        GD.Print($"APEXGP_SMOKE accel={Sim.SpeedKmh:F2}");
+                        _smokePhase = 2;
+                    }
+                    break;
+                case 2: // full brake
+                    ThrottleInput = 0; BrakeInput = 1;
+                    if (_smokeT >= 5.6)
+                    {
+                        GD.Print($"APEXGP_SMOKE brake={Sim.SpeedKmh:F2}");
+                        _smokePhase = 3;
+                    }
+                    break;
             }
         }
 
         ReadInput();
         var sim = _vehicle;
+
+        if (ExternalControl)
+        {
+            // The RaceController steps this car and feeds its inputs; we just render.
+            sim.Throttle = ThrottleInput;
+            sim.Brake = BrakeInput;
+            sim.SteerInput = SteerInput;
+            ApplySimToScene(delta);
+            return;
+        }
+
         sim.Throttle = ThrottleInput;
         sim.Brake = BrakeInput;
         sim.SteerInput = SteerInput;

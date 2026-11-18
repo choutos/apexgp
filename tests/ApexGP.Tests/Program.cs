@@ -28,6 +28,7 @@ public static class Program
         Run("track.buildClosesLoop", TrackTests.Build_ClosesLoopAndMeasuresLength);
         Run("track.gripModel", TrackTests.GripModel_OffTrackIsSlippery);
         Run("track.botCompletesLaps", TrackTests.Bot_CompletesThreeLapsOnTrack);
+        Run("race.threeCarCompletes", RaceTests.ThreeCarRace_CompletesWithSaneOrdering);
         Run("vehicle.brakesFromLowSpeed", VehicleDynamicsTests.BrakesFromLowSpeed);
         Run("vehicle.steadyStateTopSpeed", VehicleDynamicsTests.SteadyStateTopSpeed);
         Run("vehicle.cornering", VehicleDynamicsTests.CorneringSteersAndStaysSane);
