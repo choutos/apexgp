@@ -20,6 +20,16 @@ public static class TrackTests
         Checks.Check(maxK > 0.005, $"no curvature found (max κ={maxK:F4})");
     }
 
+    public static void Build_DolphinRingIsValid()
+    {
+        var t = TrackCatalog.DolphinRing();
+        Checks.Check(t.TotalLength > 500 && t.TotalLength < 1500, $"unreasonable Dolphin Ring length {t.TotalLength:F0} m");
+        int n = t.Samples.Length;
+        double gap = Dist(t.Samples[n - 1], t.Samples[0]);
+        Checks.Check(gap < 7.0, $"Dolphin Ring does not close: {gap:F1} m gap");
+        Checks.Check(t.SpeedTargets.Min() > 8.0, $"profile has a near-zero-speed point: {t.SpeedTargets.Min() * 3.6:F0} km/h");
+    }
+
     public static void GripModel_OffTrackIsSlippery()
     {
         var t = TrackCatalog.SunriseLoop();

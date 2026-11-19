@@ -22,8 +22,23 @@ public sealed class CarSpec
         },
         new()
         {
+            Id = "corvid", Name = "Corvid Cup Edition", Price = 28000,
+            BuildConfig = () => With(VehicleConfig.PrototypeGtB(), torque: 1.35, mass: 1150, finalDrive: 5.0),
+        },
+        new()
+        {
             Id = "apexRS", Name = "Apex RS Coupe", Price = 34000,
             BuildConfig = () => With(VehicleConfig.PrototypeGtB(), torque: 1.22, mass: 1190, mu: 1.10),
+        },
+        new()
+        {
+            Id = "tsukasa", Name = "Tsukasa Type-R", Price = 46000,
+            BuildConfig = () => With(VehicleConfig.PrototypeGtB(), torque: 1.55, mass: 1080, mu: 1.14),
+        },
+        new()
+        {
+            Id = "onibi", Name = "Onibi GT Twin-Turbo", Price = 68000,
+            BuildConfig = () => With(VehicleConfig.PrototypeGtB(), torque: 2.0, mass: 1400),
         },
         new()
         {

@@ -34,6 +34,12 @@ public static class EventCalendar
         },
         new()
         {
+            Id = "dolphinSprint", Name = "Dolphin Ring Sprint", TrackName = "Dolphin Ring",
+            Laps = 2, RequiredLicense = "club", EntryFee = 800, Prize = 11000,
+            AiSpeedFactors = new[] { 0.93, 0.90, 0.86 },
+        },
+        new()
+        {
             Id = "sunriseEnduro", Name = "Sunrise Enduro", TrackName = "Sunrise Loop",
             Laps = 5, RequiredLicense = "national", EntryFee = 1000, Prize = 16000,
             AiSpeedFactors = new[] { 0.98, 0.96, 0.94, 0.90 },

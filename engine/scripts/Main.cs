@@ -91,10 +91,25 @@ public partial class Main : Node3D
         _licenceDef = null;
     }
 
+    private Node3D? _trackVisuals;
+
+    private void RebuildTrackVisuals(TrackSurface newTrack)
+    {
+        if (_trackVisuals != null && ReferenceEquals(Track, newTrack)) return;
+        _trackVisuals?.QueueFree();
+        _trackVisuals = null;
+        Track = newTrack;
+        _trackVisuals = TrackMesh.Build(Track);
+        WorldViewport.AddChild(_trackVisuals);
+        // licence runs and races both reference Track — they were torn down already
+    }
+
     public void StartEvent(CareerProfile profile, EventDef ev)
     {
         TeardownRace();
         _activeEvent = ev;
+        var eventTrack = TrackCatalog.ByName(ev.TrackName);
+        RebuildTrackVisuals(eventTrack);
         _race = Career.StartEvent(profile, ev, Track, Career.ConfigFor(profile), playerIsAi: false);
         var paints = new[] { new Color(0.78f, 0.16f, 0.12f), new Color(0.16f, 0.38f, 0.82f),
                              new Color(0.88f, 0.88f, 0.86f), new Color(0.95f, 0.6f, 0.1f), new Color(0.2f, 0.7f, 0.3f) };
