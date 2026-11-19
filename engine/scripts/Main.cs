@@ -75,6 +75,30 @@ public partial class Main : Node3D
 
         _careerUi = new CareerUi();
         AddChild(_careerUi);
+
+        // pause overlay (Esc toggles; SceneTree.Paused stops physics — cars freeze)
+        _pauseLabel = new Label
+        {
+            Text = "PAUSED — ESC to resume",
+            Position = new Vector2(240, 130),
+            Visible = false,
+        };
+        _pauseLabel.AddThemeFontSizeOverride("font_size", 20);
+        var pauseLayer = new CanvasLayer { Layer = 5 };
+        pauseLayer.AddChild(_pauseLabel);
+        AddChild(pauseLayer);
+    }
+
+    private Label _pauseLabel = null!;
+
+    public override void _UnhandledKeyInput(InputEvent @event)
+    {
+        if (@event is not InputEventKey { Pressed: true } key) return;
+        if (key.Keycode == Key.Escape)
+        {
+            GetTree().Paused = !GetTree().Paused;
+            _pauseLabel.Visible = GetTree().Paused;
+        }
     }
 
     // ---------- race lifecycle ----------

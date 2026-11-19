@@ -97,6 +97,50 @@ public static class CareerTests
         }
     }
 
+    public static void Balance_StockCarCanWinCup1()
+    {
+        var p = CareerProfile.New();
+        p.Credits = 20000;
+        Career.BuyCar(p, CarSpec.ById("circuit1600")); // the starter car, stock
+        var ev = EventCalendar.ById("sunriseCup1");
+        var track = TrackCatalog.SunriseLoop();
+        var race = Career.StartEvent(p, ev, track, Career.ConfigFor(p), playerIsAi: true);
+
+        double dt = 1.0 / 120.0, t = 0;
+        while (race.Phase != RacePhase.Finished && t < 420)
+        {
+            race.Step(dt, null);
+            t += dt;
+        }
+        Checks.Check(race.Phase == RacePhase.Finished, "balance race did not finish");
+        var player = race.Racers.First(r => r.IsPlayer);
+        Checks.Check(player.Position == 1, $"stock starter car finished P{player.Position} vs rivals {ev.AiSpeedFactors[0]}/{ev.AiSpeedFactors[1]} — ladder too hard");
+        var (prize, _) = Career.CollectPrize(p, ev, race);
+        Checks.Check(prize == ev.Prize, $"P1 prize should be full {ev.Prize}, got {prize}");
+        Console.WriteLine($"      (stock starter won Cup R1 in {race.Result!.Duration:F1}s, +{prize:F0} Cr)");
+    }
+
+    public static void Ladder_ProgressionIsCompletable()
+    {
+        // Intended economy: start → 2× Cup1 + Cup2 + Dolphin wins → Corvid tier
+        var p = CareerProfile.New();
+        Career.BuyCar(p, CarSpec.ById("circuit1600"));
+        Checks.Check(p.Credits == 2500, $"starter purchase should leave 2500 Cr, has {p.Credits}");
+
+        p.Credits += 5000 + 5000;              // 2× Cup1 wins
+        p.Licenses.Add("club");
+        p.Credits += 8000 - 500;               // Cup2 win (entry fee)
+        p.Credits += 11000 - 800;              // Dolphin Sprint win (entry fee)
+        Checks.Check(p.Credits == 30200, $"four wins should bank 30,200 Cr, has {p.Credits}");
+
+        Career.BuyCar(p, CarSpec.ById("corvid"));
+        Checks.Check(p.Credits == 2200, $"credits after Corvid buy wrong: {p.Credits}");
+
+        p.Credits += 11000;                    // defend the sprint title
+        Career.TuneCar(p, "eng2", "corvid");
+        Checks.Check(p.Credits == 13200 - 5500, $"credits after eng2 tune wrong: {p.Credits}");
+    }
+
     private static void SpawnOnTrack(Vehicle v, TrackSurface track)
     {
         var s = track.Samples[0];

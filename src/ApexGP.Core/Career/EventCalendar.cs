@@ -10,6 +10,7 @@ public sealed class EventDef
     public required double EntryFee;
     public required double Prize;
     public required double[] AiSpeedFactors;   // one per opponent
+    public string[] RivalCarIds = [];          // optional: per-rival car specs (defaults to stock prototype)
     public int PlayerGridSlot = 0;
 
     public bool CanEnter(CareerProfile p) =>
@@ -31,12 +32,14 @@ public static class EventCalendar
             Id = "sunriseCup2", Name = "Sunrise Cup — Round 2", TrackName = "Sunrise Loop",
             Laps = 3, RequiredLicense = "club", EntryFee = 500, Prize = 8000,
             AiSpeedFactors = new[] { 0.95, 0.92, 0.88 },
+            RivalCarIds = ["touringS", "circuit1600", "touringS"],
         },
         new()
         {
             Id = "dolphinSprint", Name = "Dolphin Ring Sprint", TrackName = "Dolphin Ring",
             Laps = 2, RequiredLicense = "club", EntryFee = 800, Prize = 11000,
             AiSpeedFactors = new[] { 0.93, 0.90, 0.86 },
+            RivalCarIds = ["touringS", "corvid", "apexRS"],
         },
         new()
         {
@@ -99,7 +102,8 @@ public static class Career
         for (int i = 0; i < ev.AiSpeedFactors.Length; i++)
         {
             var ai = new RacingLineFollower(track) { SpeedFactor = ev.AiSpeedFactors[i] };
-            race.AddRacer($"RIVAL-{i + 1}", VehicleConfig.PrototypeGtB(), isPlayer: false, ai: ai, lateralOffset: i % 2 == 0 ? -3.0 : 3.0);
+            var spec = i < ev.RivalCarIds.Length ? CarSpec.ById(ev.RivalCarIds[i]) : null;
+            race.AddRacer($"RIVAL-{i + 1}", spec?.BuildConfig() ?? VehicleConfig.PrototypeGtB(), isPlayer: false, ai: ai, lateralOffset: i % 2 == 0 ? -3.0 : 3.0);
         }
         return race;
     }

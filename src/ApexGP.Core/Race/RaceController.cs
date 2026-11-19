@@ -11,6 +11,8 @@ public sealed class Racer
     public bool IsPlayer;
     public double FinishTime = double.MaxValue;
     public int Position = 1;
+    public int SurfaceHint = -1;          // cached nearest-sample hint for wall queries
+    public double ContactCooldown;        // s — rumble hook, not sim-critical
 
     public int Laps => Timer.LapsCompleted;
 }
@@ -120,6 +122,8 @@ public sealed class RaceController
                     if (r.Laps >= Laps && r.FinishTime > Time)
                         r.FinishTime = Time;
                 }
+                ResolveCarCarCollisions();
+                ResolveWallContacts();
                 if (Racers.All(r => r.FinishTime <= Time))
                     Phase = RacePhase.Finished;
                 break;
@@ -144,6 +148,82 @@ public sealed class RaceController
     {
         r.Car.Throttle = 0;
         r.Car.Brake = 0.3;
+    }
+
+    // ---- contact resolution (v0.3) ----
+    // Sphere-per-car approximation: two spheres per car would be more physical,
+    // but one 2.3 m sphere at the CoM gives stable, tunable, non-explosive
+    // bumper-car behaviour that is *good enough* to make racing close racing.
+    // Walls: lateral clamp at halfWidth * WallFactor with soft bounce — cuts
+    // are now impossible, matching GT1's invisible-wall behaviour.
+    private const double CarRadius = 1.15;
+    private const double WallFactor = 1.32;
+    private const double Restitution = 0.3;
+
+    private void ResolveCarCarCollisions()
+    {
+        for (int a = 0; a < Racers.Count; a++)
+        for (int b = a + 1; b < Racers.Count; b++)
+        {
+            var ca = Racers[a].Car;
+            var cb = Racers[b].Car;
+            double dx = cb.Position.X - ca.Position.X;
+            double dz = cb.Position.Z - ca.Position.Z;
+            double d2 = dx * dx + dz * dz;
+            double minDist = CarRadius * 2;
+            if (d2 >= minDist * minDist || d2 < 1e-9) continue;
+
+            double d = System.Math.Sqrt(d2);
+            double nx = dx / d, nz = dz / d;
+            double overlap = minDist - d;
+
+            // positional separation, half each (equal mass)
+            ca.Position = new System.Numerics.Vector3(
+                ca.Position.X - (float)(nx * overlap * 0.5), ca.Position.Y,
+                ca.Position.Z - (float)(nz * overlap * 0.5));
+            cb.Position = new System.Numerics.Vector3(
+                cb.Position.X + (float)(nx * overlap * 0.5), cb.Position.Y,
+                cb.Position.Z + (float)(nz * overlap * 0.5));
+
+            // impulse if closing
+            double rvx = cb.Velocity.X - ca.Velocity.X;
+            double rvz = cb.Velocity.Z - ca.Velocity.Z;
+            double vRel = rvx * nx + rvz * nz;
+            if (vRel >= 0) continue;
+
+            double dv = vRel * (1 + Restitution) / 2;
+            var n = new System.Numerics.Vector3((float)nx, 0f, (float)nz);
+            ca.Velocity += n * (float)dv;
+            cb.Velocity -= n * (float)dv;
+            Racers[a].ContactCooldown = 0.4;
+            Racers[b].ContactCooldown = 0.4;
+        }
+    }
+
+    private void ResolveWallContacts()
+    {
+        double wallLat = _track.HalfWidth * WallFactor;
+        foreach (var r in Racers)
+        {
+            var car = r.Car;
+            r.SurfaceHint = _track.NearestIndex(car.Position.X, car.Position.Z, r.SurfaceHint);
+            var s = _track.Samples[r.SurfaceHint];
+            double lat = (car.Position.X - s.X) * s.RightX + (car.Position.Z - s.Z) * s.RightZ;
+            if (System.Math.Abs(lat) <= wallLat) continue;
+
+            int sign = System.Math.Sign(lat);
+            car.Position = new System.Numerics.Vector3(
+                (float)(s.X + s.RightX * wallLat * sign), car.Position.Y,
+                (float)(s.Z + s.RightZ * wallLat * sign));
+
+            double vLat = car.Velocity.X * s.RightX + car.Velocity.Z * s.RightZ;
+            if (System.Math.Sign(vLat) == sign)
+            {
+                var right = new System.Numerics.Vector3((float)s.RightX, 0f, (float)s.RightZ);
+                car.Velocity -= right * (float)(vLat * (1 + Restitution));
+                r.ContactCooldown = 0.4;
+            }
+        }
     }
 
     private void UpdatePositions()

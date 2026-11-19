@@ -41,4 +41,65 @@ public static class RaceTests
         // (off-track stats were verified for a single car in TrackTests; here we check laps exist)
         Console.WriteLine($"      (race finished in {race.Result!.Duration:F1}s; P1={race.Result.FinishOrder[0].Name})");
     }
+
+    public static void CarCarCollision_SeparatesWithoutDivergence()
+    {
+        var track = TrackCatalog.SunriseLoop();
+        var race = new RaceController(track, laps: 1);
+        var bot1 = new RacingLineFollower(track) { SpeedFactor = 1.0 };
+        var bot2 = new RacingLineFollower(track) { SpeedFactor = 1.02 };
+
+        race.AddRacer("A", VehicleConfig.PrototypeGtB(), isPlayer: false, ai: bot1, lateralOffset: 0.0);
+        race.AddRacer("B", VehicleConfig.PrototypeGtB(), isPlayer: false, ai: bot2, lateralOffset: 0.0);
+
+        // place B overlapping right behind A on the grid to force early contact
+        var carA = race.Racers[0].Car;
+        var carB = race.Racers[1].Car;
+        carB.Position = new System.Numerics.Vector3(carA.Position.X, carA.Position.Y, carA.Position.Z - 1.6f);
+        carB.Surface = track;
+
+        double dt = 1.0 / 120.0;
+        double tSim = 0;
+        bool everTooClose = false;
+        while (race.Phase != RacePhase.Finished && tSim < 200.0)
+        {
+            race.Step(dt, null);
+            tSim += dt;
+            double dx = carB.Position.X - carA.Position.X;
+            double dz = carB.Position.Z - carA.Position.Z;
+            if (dx * dx + dz * dz < 1.4 * 1.4) everTooClose = true;
+            if (carA.Diverged || carB.Diverged) break;
+        }
+
+        Checks.Check(!carA.Diverged && !carB.Diverged, "collision caused divergence");
+        Checks.Check(race.Phase == RacePhase.Finished, $"race with contact did not finish ({tSim:F0}s)");
+        Checks.Check(!everTooClose, "cars interpenetrated below the collision radius");
+        Console.WriteLine($"      (contact race finished in {race.Result!.Duration:F1}s)");
+    }
+
+    public static void WallClamp_PreventsInfieldCuts()
+    {
+        var track = TrackCatalog.SunriseLoop();
+        var race = new RaceController(track, laps: 1);
+        // aim the car at ~60° off the racing line so it runs at the wall
+        var car = race.AddRacer("CUTTER", VehicleConfig.PrototypeGtB(), isPlayer: false, ai: null, lateralOffset: 0.0).Car;
+        car.Throttle = 1.0;
+        car.SteerInput = 0.9; // hard right, off track
+
+        double dt = 1.0 / 120.0;
+        double wallLat = track.HalfWidth * 1.32;
+        double maxLat = 0;
+        for (int i = 0; i < 120 * 6; i++)
+        {
+            race.Step(dt, null);
+            int idx = track.NearestIndex(car.Position.X, car.Position.Z, race.Racers[0].SurfaceHint);
+            var s = track.Samples[idx];
+            double lat = System.Math.Abs((car.Position.X - s.X) * s.RightX + (car.Position.Z - s.Z) * s.RightZ);
+            maxLat = System.Math.Max(maxLat, lat);
+        }
+
+        Checks.Check(!car.Diverged, "wall clamp caused divergence");
+        Checks.Check(maxLat <= wallLat + 0.6, $"car exceeded wall by {maxLat - wallLat:F1} m (max lat {maxLat:F1} m)");
+        Console.WriteLine($"      (max lateral offset {maxLat:F1} m, wall at {wallLat:F1} m)");
+    }
 }
