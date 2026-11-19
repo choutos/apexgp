@@ -64,6 +64,89 @@ public static class TrackMesh
             P(start, +slw, +slt / 2, 0.04f), P(start, -slw, +slt / 2, 0.04f));
         root.AddChild(new MeshInstance3D { Mesh = sl.Commit() });
 
+        // --- guard rails both sides ---
+        var railMat = new StandardMaterial3D { AlbedoColor = new Color(0.75f, 0.74f, 0.7f), Roughness = 0.6f, Metallic = 0.3f };
+        foreach (int side in new[] { -1, 1 })
+        {
+            var rail = new SurfaceTool();
+            rail.Begin(Godot.Mesh.PrimitiveType.Triangles);
+            rail.SetMaterial(railMat);
+            for (int i = 0; i < n; i++)
+            {
+                int j = (i + 1) % n;
+                var s0 = track.Samples[i];
+                var s1 = track.Samples[j];
+                double r0 = hw * 1.25 * side, r1 = (hw * 1.25 + 0.35) * side;
+                AddQuad(rail,
+                    Xy(s0, r0, 0.25f), Xy(s0, r1, 0.25f),
+                    Xy(s1, r1, 0.25f), Xy(s1, r0, 0.25f));   // top face
+                AddQuad(rail,
+                    Xy(s0, r1, 0.0f), Xy(s0, r1, 0.25f),
+                    Xy(s1, r1, 0.25f), Xy(s1, r1, 0.0f));    // outer face
+            }
+            root.AddChild(new MeshInstance3D { Mesh = rail.Commit() });
+        }
+
+        // --- trees (cones on trunks), scattered along the outside ---
+        var rng = new System.Random(1994);
+        var treeMat = new StandardMaterial3D { AlbedoColor = new Color(0.13f, 0.34f, 0.16f), Roughness = 1f };
+        var trunkMat = new StandardMaterial3D { AlbedoColor = new Color(0.32f, 0.22f, 0.12f) };
+        int trees = System.Math.Max(24, n / 8);
+        for (int t = 0; t < trees; t++)
+        {
+            int i = rng.Next(n);
+            var s = track.Samples[i];
+            double side = rng.NextDouble() > 0.5 ? 1 : -1;
+            double dist = hw + 4.0 + rng.NextDouble() * 9.0;
+            double tx = s.X + s.RightX * dist * side;
+            double tz = s.Z + s.RightZ * dist * side;
+            double scale = 0.8 + rng.NextDouble() * 0.9;
+
+            var tree = new Node3D();
+            var trunk = new MeshInstance3D
+            {
+                Mesh = new CylinderMesh { TopRadius = 0.12f, BottomRadius = 0.16f, Height = 1.1f, RadialSegments = 6 },
+                Position = new Vector3(0, 0.55f * (float)scale, 0),
+                Scale = new Vector3(1, (float)scale, 1),
+            };
+            trunk.MaterialOverride = trunkMat;
+            tree.AddChild(trunk);
+            var crown = new MeshInstance3D
+            {
+                Mesh = new CylinderMesh { TopRadius = 0.0f, BottomRadius = 1.05f, Height = 2.2f, RadialSegments = 6 },
+                Position = new Vector3(0, (1.1f + 1.1f) * (float)scale, 0),
+                Scale = new Vector3((float)scale, (float)scale, (float)scale),
+            };
+            crown.MaterialOverride = treeMat;
+            tree.AddChild(crown);
+            tree.Position = new Vector3((float)tx, 0f, (float)tz);
+            root.AddChild(tree);
+        }
+
+        // --- start gantry ---
+        var gantry = new Node3D();
+        var pillarMat = new StandardMaterial3D { AlbedoColor = new Color(0.2f, 0.2f, 0.22f), Metallic = 0.4f, Roughness = 0.5f };
+        foreach (int side in new[] { -1, 1 })
+        {
+            var pillar = new MeshInstance3D
+            {
+                Mesh = new BoxMesh { Size = new Vector3(0.35f, 5.4f, 0.35f) },
+                Position = new Vector3((float)(start.X + start.RightX * (hw + 1.2) * side), 2.7f,
+                                       (float)(start.Z + start.RightZ * (hw + 1.2) * side)),
+            };
+            pillar.MaterialOverride = pillarMat;
+            gantry.AddChild(pillar);
+        }
+        var banner = new MeshInstance3D
+        {
+            Mesh = new BoxMesh { Size = new Vector3(2.2f * (float)hw, 0.7f, 0.12f) },
+            Position = new Vector3((float)start.X, 5.1f, (float)start.Z),
+            Rotation = new Vector3(0, (float)System.Math.Atan2(-start.DirX, -start.DirZ) + Mathf.Pi / 2f, 0),
+        };
+        banner.MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.85f, 0.15f, 0.12f), Roughness = 0.7f };
+        gantry.AddChild(banner);
+        root.AddChild(gantry);
+
         return root;
     }
 

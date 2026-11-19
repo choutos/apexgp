@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Godot;
 using ApexGP.Core;
 
@@ -38,6 +39,9 @@ public partial class CarController : Node3D
         return this;
     }
 
+    private Node3D _brakeLights = null!;
+    private readonly List<StandardMaterial3D> _brakeLightMats = new();
+    private double _brakeGlow;
     private Color _paint = new(0.78f, 0.16f, 0.12f);
 
     public Vehicle Sim => _vehicle;
@@ -123,30 +127,79 @@ public partial class CarController : Node3D
 
     private void BuildBody()
     {
-        var body = new MeshInstance3D
+        // low-poly GT-style coupe: nose, cabin, spoiler, lights
+        _bodyMesh = new MeshInstance3D
         {
-            Mesh = new BoxMesh { Size = new Vector3(1.72f, 0.5f, 4.2f) },
+            Mesh = new BoxMesh { Size = new Vector3(1.72f, 0.42f, 4.2f) },
             Position = new Vector3(0f, 0.62f, 0.1f),
         };
-        body.MaterialOverride = new StandardMaterial3D
+        _bodyMesh.MaterialOverride = new StandardMaterial3D
         {
-            AlbedoColor = new Color(0.78f, 0.16f, 0.12f),
+            AlbedoColor = _paint,
             Roughness = 0.35f,
             Metallic = 0.4f,
         };
-        AddChild(body);
+        AddChild(_bodyMesh);
+
+        var nose = new MeshInstance3D
+        {
+            Mesh = new BoxMesh { Size = new Vector3(1.55f, 0.22f, 1.0f) },
+            Position = new Vector3(0f, 0.42f, -1.75f),
+        };
+        nose.MaterialOverride = new StandardMaterial3D { AlbedoColor = _paint, Roughness = 0.35f, Metallic = 0.4f };
+        AddChild(nose);
 
         var cabin = new MeshInstance3D
         {
-            Mesh = new BoxMesh { Size = new Vector3(1.5f, 0.42f, 1.9f) },
-            Position = new Vector3(0f, 1.05f, 0.25f),
+            Mesh = new BoxMesh { Size = new Vector3(1.46f, 0.40f, 1.9f) },
+            Position = new Vector3(0f, 1.02f, 0.30f),
         };
         cabin.MaterialOverride = new StandardMaterial3D
         {
-            AlbedoColor = new Color(0.1f, 0.12f, 0.16f),
-            Roughness = 0.25f,
+            AlbedoColor = new Color(0.10f, 0.12f, 0.16f),
+            Roughness = 0.2f,
+            Metallic = 0.2f,
         };
         AddChild(cabin);
+
+        // rear wing on struts
+        var wing = new MeshInstance3D
+        {
+            Mesh = new BoxMesh { Size = new Vector3(1.6f, 0.07f, 0.42f) },
+            Position = new Vector3(0f, 1.05f, 1.85f),
+        };
+        wing.MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.12f, 0.12f, 0.13f), Roughness = 0.6f };
+        AddChild(wing);
+        foreach (float sx in new[] { -0.6f, 0.6f })
+        {
+            var strut = new MeshInstance3D
+            {
+                Mesh = new BoxMesh { Size = new Vector3(0.08f, 0.26f, 0.2f) },
+                Position = new Vector3(sx, 0.88f, 1.85f),
+            };
+            strut.MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.12f, 0.12f, 0.13f) };
+            AddChild(strut);
+        }
+
+        // brake lights: emissive quads at the rear, lit under braking
+        _brakeLights = new Node3D();
+        foreach (float sx in new[] { -0.6f, 0.6f })
+        {
+            var light = new MeshInstance3D
+            {
+                Mesh = new BoxMesh { Size = new Vector3(0.4f, 0.12f, 0.05f) },
+                Position = new Vector3(sx, 0.72f, 2.2f),
+            };
+            _brakeLightMats.Add(new StandardMaterial3D
+            {
+                AlbedoColor = new Color(0.35f, 0.02f, 0.02f),
+                EmissionEnabled = true,
+                Emission = new Color(0.0f, 0.0f, 0.0f),
+            });
+            light.MaterialOverride = _brakeLightMats[^1];
+            _brakeLights.AddChild(light);
+        }
+        AddChild(_brakeLights);
     }
 
     private void BuildWheels()
@@ -247,7 +300,28 @@ public partial class CarController : Node3D
         }
 
         ApplySimToScene(delta);
+        UpdateBrakeLights(delta);
         UpdateEngineAudio();
+        UpdateRumble();
+    }
+
+    private void UpdateBrakeLights(double delta)
+    {
+        if (_brakeLightMats.Count == 0) return;
+        _brakeGlow = System.Math.Clamp(_brakeGlow + (BrakeInput > 0.1 ? delta * 6 : -delta * 6), 0, 1);
+        foreach (var m in _brakeLightMats)
+            m.Emission = new Color((float)(_brakeGlow * 0.9), 0.02f, 0.02f);
+    }
+
+    /// <summary>Gamepad rumble tied to tire slip (v0.2 FFB stand-in).</summary>
+    private void UpdateRumble()
+    {
+        if (!UseKeyboard) return; // keyboard-only players don't own a pad
+        float slip = 0f;
+        foreach (var w in Sim.Wheels)
+            slip = System.Math.Max(slip, (float)System.Math.Abs(w.SlipRatio) - 0.15f);
+        float strong = System.Math.Clamp(slip * 0.8f, 0f, 0.8f);
+        Input.StartJoyVibration(0, strong * 0.6f, strong, 0.12f);
     }
 
     private double _accum;

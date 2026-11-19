@@ -36,11 +36,29 @@ public partial class Main : Node3D
     private readonly bool _smoke = false;
 
     public TrackSurface Track = null!;
+    public SubViewport WorldViewport = null!;
     private bool _hudVisible = true;
 
     public override void _Ready()
     {
-        BuildWorld();
+        // PS1-style: render the 3D world into a 480×270 SubViewport, upscaled with
+        // nearest-neighbour filtering. HUD/career UI stays native-res above it.
+        var vp = new SubViewport
+        {
+            Size = new Vector2I(480, 270),
+            AudioListenerEnable3D = false,
+        };
+        vp.RenderTargetUpdateMode = SubViewport.UpdateMode.Always;
+        var container = new SubViewportContainer
+        {
+            Stretch = true,
+            TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+        };
+        AddChild(container);
+        container.AddChild(vp);
+        WorldViewport = vp;
+
+        BuildWorld(vp);
         BuildHud();
         _profile = CareerProfile.Load(CareerUi.UserProfilePath);
 
@@ -85,7 +103,7 @@ public partial class Main : Node3D
             var node = new CarController().WithVehicle(_race.Racers[i].Car).WithPaint(paints[i % paints.Length]);
             node.ExternalControl = true;
             node.UseKeyboard = _race.Racers[i].IsPlayer;
-            AddChild(node);
+            WorldViewport.AddChild(node);
             _carNodes.Add(node);
             if (_race.Racers[i].IsPlayer)
                 _player = node;
@@ -110,7 +128,7 @@ public partial class Main : Node3D
         var node = new CarController().WithVehicle(_licenceCar).WithPaint(new Color(0.78f, 0.16f, 0.12f));
         node.ExternalControl = true;
         node.UseKeyboard = true;
-        AddChild(node);
+        WorldViewport.AddChild(node);
         _carNodes.Add(node);
         _player = node; // the human drives the licence test
         _licenceDef = def;
@@ -254,7 +272,7 @@ public partial class Main : Node3D
 
     // ---------- world ----------
 
-    private void BuildWorld()
+    private void BuildWorld(Node world)
     {
         var env = new WorldEnvironment
         {
@@ -270,15 +288,15 @@ public partial class Main : Node3D
                 FogDensity = 0.0009f,
             },
         };
-        AddChild(env);
+        world.AddChild(env);
 
         var sun = new DirectionalLight3D
         {
             RotationDegrees = new Vector3(-42f, 35f, 0f),
             LightEnergy = 1.15f,
-            ShadowEnabled = true,
+            ShadowEnabled = false,
         };
-        AddChild(sun);
+        world.AddChild(sun);
 
         var ground = new MeshInstance3D
         {
@@ -290,13 +308,13 @@ public partial class Main : Node3D
             Roughness = 0.95f,
         };
         ground.Position = new Vector3(150f, 0f, -120f);
-        AddChild(ground);
+        world.AddChild(ground);
 
         Track = TrackCatalog.SunriseLoop();
-        AddChild(TrackMesh.Build(Track));
+        world.AddChild(TrackMesh.Build(Track));
 
         _camera = new Camera3D { Fov = 68f, Current = true };
-        AddChild(_camera);
+        world.AddChild(_camera);
     }
 
     private void BuildHud()
