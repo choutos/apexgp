@@ -27,12 +27,12 @@ jobs:
           chmod +x "$BIN"
           echo "GODOT_BIN=$BIN" >> "$GITHUB_ENV"
           curl -fL -o templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_export_templates.tpz"
-          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono"
           unzip -q templates.tpz 'templates/*' -d /tmp/tpl
-          cp /tmp/tpl/templates/linux_release.x86_64 "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
-          cp /tmp/tpl/templates/linux_debug.x86_64 "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
-          cp /tmp/tpl/templates/windows_release_x86_64.exe "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
-          cp /tmp/tpl/templates/windows_debug_x86_64.exe "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          cp /tmp/tpl/templates/linux_release.x86_64 "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/"
+          cp /tmp/tpl/templates/linux_debug.x86_64 "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/"
+          cp /tmp/tpl/templates/windows_release_x86_64.exe "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/"
+          cp /tmp/tpl/templates/windows_debug_x86_64.exe "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable.mono/"
           "$BIN" --version
 
       - name: Import project (class cache)
@@ -40,23 +40,24 @@ jobs:
 
       - name: Export Linux x86_64
         run: |
-          mkdir -p build
-          "$GODOT_BIN" --headless --path engine --export-release "Linux" build/apexgp_linux/ApexGP.x86_64
+          mkdir -p "$GITHUB_WORKSPACE/build/apexgp_linux"
+          "$GODOT_BIN" --headless --path engine --export-release "Linux" "$GITHUB_WORKSPACE/build/apexgp_linux/ApexGP.x86_64"
 
       - name: Export Windows x86_64
         run: |
-          "$GODOT_BIN" --headless --path engine --export-release "Windows" build/apexgp_windows/ApexGP.exe
+          mkdir -p "$GITHUB_WORKSPACE/build/apexgp_windows"
+          "$GODOT_BIN" --headless --path engine --export-release "Windows" "$GITHUB_WORKSPACE/build/apexgp_windows/ApexGP.exe"
 
       - name: Smoke the Linux export
         run: |
-          APEXGP_SMOKE=1 ./build/apexgp_linux/ApexGP.x86_64 --headless --quit-after 700 2>&1 | tee smoke_export.log
+          APEXGP_SMOKE=1 "$GITHUB_WORKSPACE/build/apexgp_linux/ApexGP.x86_64" --headless --quit-after 700 2>&1 | tee smoke_export.log
           accel=$(grep -oE "APEXGP_SMOKE accel=[0-9.]+" smoke_export.log | head -1 | cut -d= -f2)
           echo "exported smoke accel=${accel} km/h"
           awk -v a="$accel" 'BEGIN { exit !((a+0) >= 15.0) }'
 
       - name: Package
         run: |
-          cd build
+          cd "$GITHUB_WORKSPACE/build"
           zip -r apexgp_linux.zip apexgp_linux
           zip -r apexgp_windows.zip apexgp_windows
           sha256sum *.zip > SHA256SUMS.txt
