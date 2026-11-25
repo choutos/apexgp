@@ -9,6 +9,8 @@ jobs:
   export:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: write  # required to create the GitHub release and upload assets
     env:
       GODOT_VERSION: 4.7.2  # pin; bump deliberately together with export_presets.cfg
     steps:
