@@ -139,6 +139,7 @@ public partial class CarController : Node3D
             BuildBody();
             BuildWheels();
             for (int i = 0; i < 240; i++) _vehicle.Step(1.0 / 120.0);
+            for (int i = 0; i < 4; i++) PlaceWheel(i);
             // place so the settled CoG sits discTop + restHeight
             Position = new Vector3(Position.X, 0.08f + (float)_vehicle.Position.Y, Position.Z);
             return;
@@ -240,35 +241,51 @@ public partial class CarController : Node3D
         AddChild(_brakeLights);
     }
 
-    /// <summary>Procedural livery: paint base + stripes + race number, nearest-filtered for the PS1 look.</summary>
+    /// <summary>
+    /// Procedural livery: paint base + stripes + race number, painted per BoxMesh atlas cell
+    /// (Godot maps each box face to a sub-region, so drawing per-cell guarantees every face
+    /// shows the livery). Nearest-filtered for the PS1 look.
+    /// </summary>
     private ImageTexture MakeLiveryTexture()
     {
-        var img = Godot.Image.CreateEmpty(128, 128, false, Godot.Image.Format.Rgba8);
+        const int Size = 128;
+        const int Cols = 3, Rows = 2;
+        var img = Godot.Image.CreateEmpty(Size, Size, false, Godot.Image.Format.Rgba8);
         img.Fill(_paint);
         var b = _vehicle.Config.Body;
         var stripe = HexToColor(b.StripeHex, new Color(0.92f, 0.92f, 0.9f));
-        void Band(int x0, int x1)
-        {
-            for (int y = 0; y < 128; y++)
-                for (int x = x0; x < x1; x++)
-                    img.SetPixel(x, y, stripe);
-        }
-        if (b.StripeStyle == 1) { Band(38, 50); Band(78, 90); }
-        else if (b.StripeStyle == 2) { Band(4, 14); Band(114, 124); }
+        int cw = Size / Cols, ch = Size / Rows;
 
-        if (b.CarNumber > 0)
-        {
-            // roundel: white disc + dark ring (F1 style), centred
-            var white = new Color(0.96f, 0.95f, 0.92f);
-            var dark = new Color(0.1f, 0.1f, 0.12f);
-            for (int y = 38; y < 91; y++)
-                for (int x = 38; x < 91; x++)
+        for (int cy = 0; cy < Rows; cy++)
+            for (int cx = 0; cx < Cols; cx++)
+            {
+                int x0 = cx * cw, y0 = cy * ch;
+                void VBand(double fx0, double fx1)   // fractions of the cell width
                 {
-                    double d = System.Math.Sqrt((x - 64) * (x - 64.0) + (y - 64) * (y - 64.0));
-                    if (d < 17) img.SetPixel(x, y, white);
-                    else if (d < 20) img.SetPixel(x, y, dark);
+                    int bx0 = x0 + (int)(fx0 * cw), bx1 = x0 + (int)(fx1 * cw);
+                    for (int y = y0; y < y0 + ch; y++)
+                        for (int x = bx0; x < bx1; x++)
+                            if (x >= 0 && x < Size && y >= 0 && y < Size) img.SetPixel(x, y, stripe);
                 }
-        }
+                if (b.StripeStyle == 1) { VBand(0.30, 0.42); VBand(0.58, 0.70); }
+                else if (b.StripeStyle == 2) { VBand(0.04, 0.14); VBand(0.86, 0.96); }
+
+                if (b.CarNumber > 0)
+                {
+                    // roundel: white disc + dark ring, centred in the cell
+                    var white = new Color(0.96f, 0.95f, 0.92f);
+                    var dark = new Color(0.1f, 0.1f, 0.12f);
+                    int ccx = x0 + cw / 2, ccy = y0 + ch / 2, r = ch / 5;
+                    for (int y = ccy - r - 2; y <= ccy + r + 2; y++)
+                        for (int x = ccx - r - 2; x <= ccx + r + 2; x++)
+                        {
+                            double d = System.Math.Sqrt((x - ccx) * (x - ccx) + (y - ccy) * (double)(y - ccy));
+                            if (x < 0 || x >= Size || y < 0 || y >= Size) continue;
+                            if (d < r) img.SetPixel(x, y, white);
+                            else if (d < r + 3) img.SetPixel(x, y, dark);
+                        }
+                }
+            }
         return ImageTexture.CreateFromImage(img);
     }
 
