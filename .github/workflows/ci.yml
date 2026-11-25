@@ -88,9 +88,9 @@ jobs:
         run: |
           mkdir -p shots
           APEXGP_SHOT_DEALERSHIP="$GITHUB_WORKSPACE/shots/dealership.png" \
-            xvfb-run -a "$GODOT_BIN" --rendering-driver opengl3 --path engine 2>&1 | tee visual.log
+            timeout 120 xvfb-run -a "$GODOT_BIN" --rendering-driver opengl3 --path engine --quit-after 400 2>&1 | tee visual.log
           APEXGP_SHOT_RACE="$GITHUB_WORKSPACE/shots/race.png" \
-            xvfb-run -a "$GODOT_BIN" --rendering-driver opengl3 --path engine 2>&1 | tee visual_race.log
+            timeout 180 xvfb-run -a "$GODOT_BIN" --rendering-driver opengl3 --path engine --quit-after 500 2>&1 | tee visual_race.log
           test -f shots/dealership.png || { echo "::error::dealership screenshot missing"; exit 1; }
           test -f shots/race.png || { echo "::error::race screenshot missing"; exit 1; }
 

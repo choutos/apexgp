@@ -75,6 +75,8 @@ public partial class Main : Node3D
             StartEvent(_profile, ev);
             _shotFrames = 260;
             _shotPath = _raceShotPath;
+            GD.Print("APEXGP_SHOT: race mode armed");
+            return;
         }
 
         if (OS.GetEnvironment("APEXGP_SMOKE") == "1")
@@ -567,7 +569,12 @@ public partial class Main : Node3D
     private void CaptureScreenshotIfRequested()
     {
         if (_shotPath == "") return;
-        if (_shotFrames > 0) { _shotFrames--; return; }
+        if (_shotFrames > 0)
+        {
+            _shotFrames--;
+            if (_shotFrames == 130) GD.Print("APEXGP_SHOT: halfway");
+            return;
+        }
         var img = GetViewport().GetTexture().GetImage();
         img.SavePng(_shotPath);
         GD.Print($"APEXGP_SHOT saved to {_shotPath}");
