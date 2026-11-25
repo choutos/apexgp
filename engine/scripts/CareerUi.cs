@@ -153,7 +153,7 @@ public partial class CareerUi : CanvasLayer
                 _title.Text = "DEALERSHIP";
                 _info.Text = $"{_profile.Credits:F0} Cr";
                 bool first = true;
-                foreach (var spec in CarSpec.All)
+                foreach (var spec in CarSpec.All.OrderBy(c => c.Price))
                 {
                     var owned = _profile.Garage.Any(g => g.CarId == spec.Id);
                     var captured = spec;
