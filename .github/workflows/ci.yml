@@ -84,17 +84,20 @@ jobs:
       - name: Build game assembly
         run: dotnet build engine/ApexGP.Game.csproj --no-incremental
 
-      - name: Render dealership screenshot under Xvfb (llvmpipe)
+      - name: Render dealership + race screenshots under Xvfb (llvmpipe)
         run: |
           mkdir -p shots
           APEXGP_SHOT_DEALERSHIP="$GITHUB_WORKSPACE/shots/dealership.png" \
             xvfb-run -a "$GODOT_BIN" --rendering-driver opengl3 --path engine 2>&1 | tee visual.log
-          test -f shots/dealership.png || { echo "::error::screenshot not produced"; exit 1; }
+          APEXGP_SHOT_RACE="$GITHUB_WORKSPACE/shots/race.png" \
+            xvfb-run -a "$GODOT_BIN" --rendering-driver opengl3 --path engine 2>&1 | tee visual_race.log
+          test -f shots/dealership.png || { echo "::error::dealership screenshot missing"; exit 1; }
+          test -f shots/race.png || { echo "::error::race screenshot missing"; exit 1; }
 
       - name: Upload screenshot artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dealership-screenshot
-          path: shots/dealership.png
+          name: visual-screenshots
+          path: shots/*.png
           if-no-files-found: error
 

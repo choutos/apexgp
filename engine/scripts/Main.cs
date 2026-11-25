@@ -53,6 +53,7 @@ public partial class Main : Node3D
         {
             Stretch = true,
             TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+            AnchorLeft = 0f, AnchorTop = 0f, AnchorRight = 1f, AnchorBottom = 1f,
         };
         AddChild(container);
         container.AddChild(vp);
@@ -62,6 +63,19 @@ public partial class Main : Node3D
         BuildHud();
         BuildShowroom();
         _profile = CareerProfile.Load(CareerUi.UserProfilePath);
+
+        // Race screenshot hook for visual CI (run with APEXGP_SHOT_RACE=/abs/path.png).
+        _raceShotPath = OS.GetEnvironment("APEXGP_SHOT_RACE");
+        if (_raceShotPath != "")
+        {
+            var ev = EventCalendar.ById("sunriseCup1");
+            _profile = CareerProfile.New();
+            _profile.Credits = 50000;
+            Career.BuyCar(_profile, CarSpec.ById("circuit1600"));
+            StartEvent(_profile, ev);
+            _shotFrames = 260;
+            _shotPath = _raceShotPath;
+        }
 
         if (OS.GetEnvironment("APEXGP_SMOKE") == "1")
         {
@@ -78,10 +92,13 @@ public partial class Main : Node3D
         AddChild(_careerUi);
         _careerUi.SetReplayHandler(StartReplay);
 
-        // Screenshot hook for visual CI (requires a real display — runners have Xvfb).
+        // Dealership screenshot hook for visual CI.
         _shotPath = OS.GetEnvironment("APEXGP_SHOT_DEALERSHIP");
         if (_shotPath != "")
+        {
+            _shotFrames = 45;
             _careerUi.ShowScreen(CareerUi.Screen.Dealership);
+        }
 
         // pause overlay (Esc toggles; SceneTree.Paused stops physics — cars freeze)
         _pauseLabel = new Label
@@ -544,13 +561,13 @@ public partial class Main : Node3D
     }
 
     private string _shotPath = "";
-    private int _shotFrame = -1;
+    private string _raceShotPath = "";
+    private int _shotFrames = -1;
 
     private void CaptureScreenshotIfRequested()
     {
         if (_shotPath == "") return;
-        _shotFrame = _shotFrame < 0 ? 0 : _shotFrame + 1;
-        if (_shotFrame < 45) return;
+        if (_shotFrames > 0) { _shotFrames--; return; }
         var img = GetViewport().GetTexture().GetImage();
         img.SavePng(_shotPath);
         GD.Print($"APEXGP_SHOT saved to {_shotPath}");
