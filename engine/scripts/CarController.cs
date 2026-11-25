@@ -133,10 +133,14 @@ public partial class CarController : Node3D
         _vehicle.Position = new System.Numerics.Vector3(0f, 1.0f, 0f);
         if (GhostMode)
         {
-            // replay ghost: visuals only, no sim, no audio, no input
+            // replay ghost / showroom car: visuals only. Settle the inert vehicle on
+            // the flat ground so wheel geometry and ride height match a live car.
             _ghostConfig = VehicleConfig.PrototypeGtB();
             BuildBody();
             BuildWheels();
+            for (int i = 0; i < 240; i++) _vehicle.Step(1.0 / 120.0);
+            // place so the settled CoG sits discTop + restHeight
+            Position = new Vector3(Position.X, 0.08f + (float)_vehicle.Position.Y, Position.Z);
             return;
         }
         BuildBody();

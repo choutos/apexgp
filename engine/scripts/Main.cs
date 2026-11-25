@@ -492,7 +492,7 @@ public partial class Main : Node3D
         _showroomTurntable = new Node3D();
         var disc = new MeshInstance3D
         {
-            Mesh = new CylinderMesh { TopRadius = 2.6f, BottomRadius = 2.6f, Height = 0.08f, RadialSegments = 48 },
+            Mesh = new CylinderMesh { TopRadius = 3.3f, BottomRadius = 3.3f, Height = 0.08f, RadialSegments = 48 },
             Position = new Vector3(0, 0.04f, 0),
         };
         disc.MaterialOverride = new StandardMaterial3D
@@ -515,11 +515,11 @@ public partial class Main : Node3D
 
         var cam = new Camera3D
         {
-            Position = new Vector3(3.6f, 1.7f, 4.6f),
-            Fov = 42f,
+            Position = new Vector3(4.6f, 2.0f, 5.6f),
+            Fov = 40f,
             Current = true,
         };
-        cam.LookAtFromPosition(cam.Position, new Vector3(0f, 0.62f, 0f), Vector3.Up);
+        cam.LookAtFromPosition(cam.Position, new Vector3(0f, 0.72f, 0f), Vector3.Up);
         vp.AddChild(cam);
 
         _showroomContainer = new SubViewportContainer
