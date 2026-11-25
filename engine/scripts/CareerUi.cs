@@ -178,6 +178,12 @@ public partial class CareerUi : CanvasLayer
 
             case Screen.Tuning:
                 _title.Text = "TUNING SHOP";
+                if (_profile.Garage.Count == 0)
+                {
+                    _info.Text = "Buy a car at the dealership first!";
+                    _list.AddChild(Btn("← BACK", () => ShowScreen(Screen.Hub)));
+                    break;
+                }
                 _info.Text = $"{_profile.Credits:F0} Cr — {CarSpec.ById(_profile.ActiveCarId).Name}";
                 var active = _profile.Garage.First(g => g.CarId == _profile.ActiveCarId);
                 foreach (var part in TunePart.All)
@@ -211,6 +217,8 @@ public partial class CareerUi : CanvasLayer
             case Screen.Events:
                 _title.Text = "RACE EVENTS";
                 _info.Text = $"{_profile.Credits:F0} Cr";
+                if (_profile.Garage.Count == 0)
+                    _info.Text += "  — buy a car at the dealership first!";
                 foreach (var ev in EventCalendar.All)
                 {
                     bool done = _profile.CompletedEvents.Contains(ev.Id);

@@ -36,7 +36,8 @@ public static class CareerTests
         Checks.Check(!ev.CanEnter(p), "should not be able to enter without licence");
         p.Licenses.Add("club");
         p.Credits = 20000;
-        Checks.Check(ev.CanEnter(p), "should be able to enter with licence + funds");
+        Career.BuyCar(p, CarSpec.ById("circuit1600"));
+        Checks.Check(ev.CanEnter(p), "should be able to enter with car + licence + funds");
 
         var track = TrackCatalog.SunriseLoop();
         var race = Career.StartEvent(p, ev, track, VehicleConfig.PrototypeGtB(), playerIsAi: true);
@@ -171,6 +172,21 @@ public static class CareerTests
         var player = race.Racers.First(r => r.IsPlayer);
         Checks.Check(player.Position <= 2, $"tuned Corvid finished P{player.Position} at Kanyu Challenge — third tier unreachable");
         Console.WriteLine($"      (tuned Corvid finished P{player.Position} in Kanyu Challenge, {race.Result!.Duration:F1}s)");
+    }
+
+    public static void GuardRailsForEmptyGarage()
+    {
+        // Fresh profile (no car bought yet): licence school and the menus must not crash.
+        var p = CareerProfile.New();
+        foreach (var ev in EventCalendar.All)
+            Checks.Check(!ev.CanEnter(p), $"event {ev.Id} should be locked with an empty garage");
+        Checks.Throws<InvalidOperationException>(() => Career.ConfigFor(p));
+
+        // Buying the first car sets the active car and unlocks entry requirements again.
+        p.Credits = 50000;
+        Career.BuyCar(p, CarSpec.ById("circuit1600"));
+        Checks.Check(Career.ConfigFor(p).MassKg > 0, "config after first buy is broken");
+        Checks.Check(EventCalendar.ById("sunriseCup1").CanEnter(p), "Cup 1 should be enterable with a car + credits");
     }
 
     private static void SpawnOnTrack(Vehicle v, TrackSurface track)

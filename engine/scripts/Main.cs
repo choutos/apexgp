@@ -185,7 +185,9 @@ public partial class Main : Node3D
     public void StartLicenseTest(LicenseTestDef def)
     {
         TeardownRace();
-        var cfg = Career.ConfigFor(_profile);
+        // GT-style: licence tests run in a supplied car. Use the player's car when
+        // they own one; a fresh profile (empty garage) gets the standard test car.
+        var cfg = _profile.Garage.Count > 0 ? Career.ConfigFor(_profile) : VehicleConfig.PrototypeGtB();
         _licenceCar = new Vehicle(cfg);
         var s = Track.Samples[0];
         _licenceCar.Position = new System.Numerics.Vector3((float)(s.X + s.RightX * 3), 1.0f, (float)(s.Z + s.RightZ * 3));

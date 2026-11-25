@@ -14,6 +14,7 @@ public sealed class EventDef
     public int PlayerGridSlot = 0;
 
     public bool CanEnter(CareerProfile p) =>
+        p.Garage.Count > 0 &&
         (RequiredLicense == null || p.Licenses.Contains(RequiredLicense)) && p.Credits >= EntryFee;
 }
 
