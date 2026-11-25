@@ -358,9 +358,9 @@ public partial class CarController : Node3D
                         _smokePhase = 2;
                     }
                     break;
-                case 2: // full brake
+                case 2: // full brake (phase extended for the buffed car's higher entry speed)
                     ThrottleInput = 0; BrakeInput = 1;
-                    if (_smokeT >= 5.6)
+                    if (_smokeT >= 6.8)
                     {
                         GD.Print($"APEXGP_SMOKE brake={Sim.SpeedKmh:F2}");
                         _smokePhase = 3;
