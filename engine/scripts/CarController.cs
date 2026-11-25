@@ -32,7 +32,7 @@ public partial class CarController : Node3D
         if (_bodyMesh != null)
             _bodyMesh.MaterialOverride = new StandardMaterial3D
             {
-                AlbedoColor = c,
+                AlbedoTexture = MakeLiveryTexture(),
                 Roughness = 0.35f,
                 Metallic = 0.4f,
             };
@@ -77,15 +77,23 @@ public partial class CarController : Node3D
     /// <summary>Procedural engine audio: a synthesized firing-order loop, pitch-tracked to RPM.</summary>
     private void BuildEngineAudio()
     {
-        // 4-cylinder firing loop: ~6 pulses per rev, 480 samples @ 11025 Hz = 43 ms loop
+        // Softer 4-cylinder firing loop: fundamental + 2nd/3rd harmonics with a
+        // rounded pulse envelope and a low thrum — less sawtooth, less rasp.
+        // All components complete whole cycles per loop (no clicks).
         const int SampleRate = 11025;
         const int Samples = 480;
         var data = new byte[Samples * 2];
         for (int i = 0; i < Samples; i++)
         {
-            double ph = (double)i / Samples * 6.0 * System.Math.PI;
-            double v = 0.72 * System.Math.Sin(ph) + 0.28 * System.Math.Sin(3 * ph) + 0.14 * System.Math.Sin(5 * ph);
-            short s16 = (short)(System.Math.Clamp(v, -1, 1) * 12000);
+            double f = (double)i / Samples;                 // 0..1 per loop
+            double ph = 2 * System.Math.PI * 6.0 * f;       // 6 firing events per rev
+            double envelope = 0.62 + 0.38 * System.Math.Cos(2 * System.Math.PI * 3.0 * f);
+            double v = 0.55 * System.Math.Sin(ph)
+                     + 0.32 * System.Math.Sin(2 * ph + 0.6)
+                     + 0.12 * System.Math.Sin(3 * ph)
+                     + 0.18 * System.Math.Sin(ph / 2);      // 3 cycles/loop: low thrum
+            v *= envelope;
+            short s16 = (short)(System.Math.Clamp(v, -1, 1) * 9000);
             data[i * 2] = (byte)(s16 & 0xFF);
             data[i * 2 + 1] = (byte)((s16 >> 8) & 0xFF);
         }
@@ -101,7 +109,7 @@ public partial class CarController : Node3D
                 LoopEnd = Samples,
                 Data = data,
             },
-            VolumeDb = -14f,
+            VolumeDb = -20f,
         };
         AddChild(_engineSound);
         _engineSound.Play();
@@ -115,8 +123,8 @@ public partial class CarController : Node3D
         if (!playerCar) return;
         double rpm = Sim.EngineRpm;
         double t = System.Math.Clamp(rpm / Sim.Config.Drivetrain.RedlineRpm, 0, 1.2);
-        _engineSound.PitchScale = (float)(0.55 + t * 2.6);
-        _engineSound.VolumeDb = (float)(-16 + ThrottleInput * 9 + t * 6);
+        _engineSound.PitchScale = (float)(0.5 + t * 1.9);
+        _engineSound.VolumeDb = (float)(-20 + ThrottleInput * 8 + t * 4);
     }
 
     public override void _Ready()
@@ -145,15 +153,17 @@ public partial class CarController : Node3D
 
     private void BuildBody()
     {
-        // low-poly GT-style coupe: nose, cabin, spoiler, lights
+        var b = _vehicle.Config.Body;
+        float halfLen = (float)(b.BodyLength / 2.0);
+
         _bodyMesh = new MeshInstance3D
         {
-            Mesh = new BoxMesh { Size = new Vector3(1.72f, 0.42f, 4.2f) },
+            Mesh = new BoxMesh { Size = new Vector3((float)b.BodyWidth, (float)b.BodyHeight, (float)b.BodyLength) },
             Position = new Vector3(0f, 0.62f, 0.1f),
         };
         _bodyMesh.MaterialOverride = new StandardMaterial3D
         {
-            AlbedoColor = _paint,
+            AlbedoTexture = MakeLiveryTexture(),
             Roughness = 0.35f,
             Metallic = 0.4f,
         };
@@ -161,16 +171,21 @@ public partial class CarController : Node3D
 
         var nose = new MeshInstance3D
         {
-            Mesh = new BoxMesh { Size = new Vector3(1.55f, 0.22f, 1.0f) },
-            Position = new Vector3(0f, 0.42f, -1.75f),
+            Mesh = new BoxMesh { Size = new Vector3((float)(b.BodyWidth - 0.17), (float)b.NoseDrop, (float)b.NoseLength) },
+            Position = new Vector3(0f, 0.42f, -halfLen + (float)(b.NoseLength / 2) - 0.15f),
         };
-        nose.MaterialOverride = new StandardMaterial3D { AlbedoColor = _paint, Roughness = 0.35f, Metallic = 0.4f };
+        nose.MaterialOverride = new StandardMaterial3D
+        {
+            AlbedoTexture = MakeLiveryTexture(),
+            Roughness = 0.35f,
+            Metallic = 0.4f,
+        };
         AddChild(nose);
 
         var cabin = new MeshInstance3D
         {
-            Mesh = new BoxMesh { Size = new Vector3(1.46f, 0.40f, 1.9f) },
-            Position = new Vector3(0f, 1.02f, 0.30f),
+            Mesh = new BoxMesh { Size = new Vector3((float)(b.BodyWidth - 0.26), (float)b.CabinHeight, (float)b.CabinLength) },
+            Position = new Vector3(0f, 1.02f, (float)b.CabinShift),
         };
         cabin.MaterialOverride = new StandardMaterial3D
         {
@@ -181,19 +196,20 @@ public partial class CarController : Node3D
         AddChild(cabin);
 
         // rear wing on struts
+        var wingZ = halfLen - 0.25f;
         var wing = new MeshInstance3D
         {
-            Mesh = new BoxMesh { Size = new Vector3(1.6f, 0.07f, 0.42f) },
-            Position = new Vector3(0f, 1.05f, 1.85f),
+            Mesh = new BoxMesh { Size = new Vector3((float)b.SpoilerSpan, 0.07f, (float)b.SpoilerChord) },
+            Position = new Vector3(0f, 1.05f, wingZ),
         };
         wing.MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.12f, 0.12f, 0.13f), Roughness = 0.6f };
         AddChild(wing);
-        foreach (float sx in new[] { -0.6f, 0.6f })
+        foreach (float sx in new[] { -(float)(b.SpoilerSpan / 2 - 0.2), (float)(b.SpoilerSpan / 2 - 0.2) })
         {
             var strut = new MeshInstance3D
             {
                 Mesh = new BoxMesh { Size = new Vector3(0.08f, 0.26f, 0.2f) },
-                Position = new Vector3(sx, 0.88f, 1.85f),
+                Position = new Vector3(sx, 0.88f, wingZ),
             };
             strut.MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.12f, 0.12f, 0.13f) };
             AddChild(strut);
@@ -201,12 +217,12 @@ public partial class CarController : Node3D
 
         // brake lights: emissive quads at the rear, lit under braking
         _brakeLights = new Node3D();
-        foreach (float sx in new[] { -0.6f, 0.6f })
+        foreach (float sx in new[] { -(float)(b.BodyWidth / 2 - 0.26), (float)(b.BodyWidth / 2 - 0.26) })
         {
             var light = new MeshInstance3D
             {
                 Mesh = new BoxMesh { Size = new Vector3(0.4f, 0.12f, 0.05f) },
-                Position = new Vector3(sx, 0.72f, 2.2f),
+                Position = new Vector3(sx, 0.72f, halfLen + 0.02f),
             };
             _brakeLightMats.Add(new StandardMaterial3D
             {
@@ -218,6 +234,49 @@ public partial class CarController : Node3D
             _brakeLights.AddChild(light);
         }
         AddChild(_brakeLights);
+    }
+
+    /// <summary>Procedural livery: paint base + stripes + race number, nearest-filtered for the PS1 look.</summary>
+    private ImageTexture MakeLiveryTexture()
+    {
+        var img = Godot.Image.CreateEmpty(128, 128, false, Godot.Image.Format.Rgba8);
+        img.Fill(_paint);
+        var b = _vehicle.Config.Body;
+        var stripe = HexToColor(b.StripeHex, new Color(0.92f, 0.92f, 0.9f));
+        void Band(int x0, int x1)
+        {
+            for (int y = 0; y < 128; y++)
+                for (int x = x0; x < x1; x++)
+                    img.SetPixel(x, y, stripe);
+        }
+        if (b.StripeStyle == 1) { Band(38, 50); Band(78, 90); }
+        else if (b.StripeStyle == 2) { Band(4, 14); Band(114, 124); }
+
+        if (b.CarNumber > 0)
+        {
+            // roundel: white disc + dark ring (F1 style), centred
+            var white = new Color(0.96f, 0.95f, 0.92f);
+            var dark = new Color(0.1f, 0.1f, 0.12f);
+            for (int y = 38; y < 91; y++)
+                for (int x = 38; x < 91; x++)
+                {
+                    double d = System.Math.Sqrt((x - 64) * (x - 64.0) + (y - 64) * (y - 64.0));
+                    if (d < 17) img.SetPixel(x, y, white);
+                    else if (d < 20) img.SetPixel(x, y, dark);
+                }
+        }
+        return ImageTexture.CreateFromImage(img);
+    }
+
+    private static Color HexToColor(string hex, Color fallback)
+    {
+        hex = hex.TrimStart('#');
+        if (hex.Length != 6 || !System.Text.RegularExpressions.Regex.IsMatch(hex, "\\A[0-9a-fA-F]{6}\\z"))
+            return fallback;
+        return new Color(
+            System.Convert.ToInt32(hex[..2], 16) / 255f,
+            System.Convert.ToInt32(hex[2..4], 16) / 255f,
+            System.Convert.ToInt32(hex[4..6], 16) / 255f, 1f);
     }
 
     private void BuildWheels()
@@ -244,6 +303,25 @@ public partial class CarController : Node3D
                 Roughness = 0.9f,
             };
             pivot.AddChild(mesh);
+            // hub cap slightly proud of both faces: makes wheel rotation readable
+            var hub = new MeshInstance3D
+            {
+                Mesh = new CylinderMesh
+                {
+                    TopRadius = (float)(cfg.Wheels[i].Radius * 0.45),
+                    BottomRadius = (float)(cfg.Wheels[i].Radius * 0.45),
+                    Height = 0.26f,
+                    RadialSegments = 8,
+                },
+                RotationDegrees = new Vector3(0f, 0f, 90f),
+            };
+            hub.MaterialOverride = new StandardMaterial3D
+            {
+                AlbedoColor = new Color(0.75f, 0.76f, 0.8f),
+                Roughness = 0.3f,
+                Metallic = 0.8f,
+            };
+            pivot.AddChild(hub);
             _wheels[i] = pivot;
             AddChild(pivot);
             PlaceWheel(i);
@@ -382,8 +460,11 @@ public partial class CarController : Node3D
         {
             var w = sim.Wheels[i];
             PlaceWheel(i);
+            // spin around the wheel axle (X) after steering yaw (Y) — Godot Euler order
+            // is YXZ, so (roll, steer, 0) rolls about the steered axle. The previous
+            // (0, steer, roll) tumbled the wheel around the car's longitudinal axis.
             _wheelRollAngle[i] = Mathf.Wrap(_wheelRollAngle[i] + (float)w.SpinRate * (float)delta, 0f, Mathf.Tau);
-            _wheels[i].Rotation = new Vector3(0, (float)w.SteerAngleRad, _wheelRollAngle[i]);
+            _wheels[i].Rotation = new Vector3(-_wheelRollAngle[i], (float)w.SteerAngleRad, 0f);
         }
     }
 }

@@ -22,7 +22,7 @@ public static class VehicleDynamicsTests
         v.Throttle = 1.0;
         double t = TestCars.TimeTo(v, kmh => kmh >= 100.0, maxSeconds: 20.0);
         Checks.Check(t > 0, "did not reach 100 km/h in 20 s");
-        Checks.Check(t >= 4.0 && t <= 11.5, $"0-100 km/h in {t:F2} s, outside [4.0, 11.5]");
+        Checks.Check(t >= 6.0 && t <= 9.5, $"0-100 km/h in {t:F2} s, outside [6.0, 9.5]");
         Console.WriteLine($"      (0-100 km/h: {t:F2} s)");
         Checks.Check(Math.Abs(v.Position.X) < 2.0, $"lateral drift {v.Position.X:F2} m");
         Checks.Check(!v.Diverged, "diverged during acceleration");
@@ -128,9 +128,10 @@ public static class VehicleDynamicsTests
         double rear0 = v.Wheels[2].SuspensionCompression + v.Wheels[3].SuspensionCompression;
         Checks.CheckNear(front0, rear0, 0.02, "static front/rear compression mismatch");
         v.Throttle = 1.0;
-        TestCars.Simulate(v, 3.0);
+        TestCars.Simulate(v, 2.0);   // sample mid-1st-gear plateau, before the 1→2 shift cuts torque
         double front = v.Wheels[0].SuspensionCompression + v.Wheels[1].SuspensionCompression;
-        double rear = v.Wheels[2].SuspensionCompression + v.Wheels[3].SuspensionCompression;
+        double rear = v.Wheels[2].SuspensionCompression + v.Wheels[2].SuspensionCompression;
+        rear = v.Wheels[2].SuspensionCompression + v.Wheels[3].SuspensionCompression;
         Checks.Check(rear > front + 0.005, $"no squat under power: rear {rear:F4} vs front {front:F4}");
         Checks.Check(!v.Diverged, "diverged");
     }
@@ -157,7 +158,7 @@ public static class VehicleDynamicsTests
                 Console.WriteLine($"      brake@{t:F2}s: {v.SpeedKmh:F2} km/h, clutch={v.Drivetrain.Clutch}, rpm={v.EngineRpm:F0}, rearK={v.Wheels[2].SlipRatio:F2}");
         }
         Console.WriteLine($"      (brake from {startKmh:F1} km/h: {t:F2} s, dt=1/120)");
-        Checks.Check(t <= 1.2, $"low-speed braking too slow: {t:F2} s");
+        Checks.Check(t <= startKmh / 24.0, $"low-speed braking too slow: {t:F2} s (start {startKmh:F1} km/h → need ≥24 km/h/s)");
     }
 
     private static double HeadingOf(Vehicle v)

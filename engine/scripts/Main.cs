@@ -91,6 +91,7 @@ public partial class Main : Node3D
         }
 
         _careerUi = new CareerUi();
+        _careerUi.BindProfile(_profile);
         AddChild(_careerUi);
         _careerUi.SetReplayHandler(StartReplay);
 

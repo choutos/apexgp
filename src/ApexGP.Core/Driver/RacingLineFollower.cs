@@ -48,7 +48,7 @@ public sealed class RacingLineFollower
         else if (vNow > vTarget + 0.5) { Throttle = 0; Brake = System.Math.Clamp((vNow - vTarget) * 0.35, 0.15, 1); }
         else { Throttle = 0.35; Brake = 0; }
         // gentle traction assist: ease the throttle under steering to keep the RWD car settled
-        Throttle *= 1.0 - System.Math.Min(System.Math.Abs(steerCmd) * 0.25, 0.25);
+        Throttle *= 1.0 - System.Math.Min(System.Math.Abs(steerCmd) * 0.4, 0.4);
 
         // stuck recovery: if beached (too slow for too long), punch the throttle
         if (vNow < 0.7) _stuckTime += dt; else _stuckTime = 0;

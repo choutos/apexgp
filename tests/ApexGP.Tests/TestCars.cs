@@ -6,7 +6,16 @@ namespace ApexGP.Tests;
 /// <summary>Shared fixtures and simulation helpers (dependency-free, no xunit).</summary>
 public static class TestCars
 {
-    public static Vehicle PrototypeGtB() => new(VehicleConfig.PrototypeGtB());
+    public static Vehicle PrototypeGtB()
+    {
+        // Spawn 1 m above the (implicit flat) ground, exactly like the game shell,
+        // so suspension/pitch dynamics are measured in the real resting geometry.
+        var v = new Vehicle(VehicleConfig.PrototypeGtB())
+        {
+            Position = new System.Numerics.Vector3(0, 1.0f, 0),
+        };
+        return v;
+    }
 
     public static void Simulate(Vehicle v, double seconds, double dt = 1.0 / 240.0)
     {

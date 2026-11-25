@@ -21,9 +21,11 @@ public partial class CareerUi : CanvasLayer
 
     public enum Screen { Title, Hub, Dealership, Tuning, Licences, Events, Results }
 
+    /// <summary>Called by Main: the one shared profile instance (no private copies).</summary>
+    public void BindProfile(CareerProfile p) => _profile = p;
+
     public override void _Ready()
     {
-        _profile = CareerProfile.Load(UserProfilePath);
         _main = GetParent<Main>();
 
         _title = new Label

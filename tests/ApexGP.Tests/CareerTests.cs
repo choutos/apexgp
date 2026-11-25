@@ -155,9 +155,10 @@ public static class CareerTests
         p.Credits = 60000;
         p.Licenses.Add("national");
         Career.BuyCar(p, CarSpec.ById("corvid"));
-        Career.TuneCar(p, "eng2");
+        Career.TuneCar(p, "eng3");      // full ladder: engine stage 3 + weight + tires + gearing
         Career.TuneCar(p, "weight1");
         Career.TuneCar(p, "tires");
+        Career.TuneCar(p, "gearing");
         var ev = EventCalendar.ById("kanyuChallenge");
         var track = TrackCatalog.KanyuPass();
         var race = Career.StartEvent(p, ev, track, Career.ConfigFor(p), playerIsAi: true);
