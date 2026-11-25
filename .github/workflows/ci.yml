@@ -34,7 +34,7 @@ jobs:
       - name: Setup .NET (pinned — required by the Godot mono build)
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: '8.0.x'
 
       - name: Install Godot (pinned, .NET/mono variant for C#)
         run: |
@@ -49,7 +49,7 @@ jobs:
         run: dotnet build engine/ApexGP.Game.csproj --no-incremental
 
       - name: Import project (class cache; import may abort benignly on mono headless)
-        run: '"$GODOT_BIN" --headless --path engine --import || true'
+        run: $GODOT_BIN --headless --path engine --import || true
 
       - name: Run smoke race (accel + brake assertions)
         run: |
@@ -59,3 +59,42 @@ jobs:
           brake=$(grep -oE "APEXGP_SMOKE brake=[0-9.]+" smoke.log | head -1 | cut -d= -f2)
           echo "accel=${accel} km/h, brake_end=${brake} km/h"
           awk -v a="$accel" -v b="$brake" 'BEGIN { exit !((a+0) >= 15.0 && (b+0) <= 5.0) }'
+
+  visual-screenshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GODOT_VERSION: 4.7.2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET (required by the Godot mono build)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install Godot mono
+        run: |
+          curl -fL -o godot_mono.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip"
+          unzip -q godot_mono.zip
+          BIN="Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64/Godot_v${GODOT_VERSION}-stable_mono_linux.x86_64"
+          chmod +x "$BIN"
+          echo "GODOT_BIN=$BIN" >> "$GITHUB_ENV"
+
+      - name: Build game assembly
+        run: dotnet build engine/ApexGP.Game.csproj --no-incremental
+
+      - name: Render dealership screenshot under Xvfb (llvmpipe)
+        run: |
+          mkdir -p shots
+          APEXGP_SHOT_DEALERSHIP="$GITHUB_WORKSPACE/shots/dealership.png" \
+            xvfb-run -a "$GODOT_BIN" --rendering-driver opengl3 --path engine 2>&1 | tee visual.log
+          test -f shots/dealership.png || { echo "::error::screenshot not produced"; exit 1; }
+
+      - name: Upload screenshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dealership-screenshot
+          path: shots/dealership.png
+          if-no-files-found: error
+

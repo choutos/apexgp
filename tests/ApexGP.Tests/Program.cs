@@ -41,6 +41,7 @@ public static class Program
         Run("career.profileRoundTrip", CareerTests.ProfileRoundTrip);
         Run("career.balanceCup1", CareerTests.Balance_StockCarCanWinCup1);
         Run("career.ladder", CareerTests.Ladder_ProgressionIsCompletable);
+        Run("career.paintHex", CareerTests.PaintHexIsValid);
         Run("career.kanyuChallenge", CareerTests.Balance_TunedCorvidCanWinKanyuChallenge);
         Run("vehicle.brakesFromLowSpeed", VehicleDynamicsTests.BrakesFromLowSpeed);
         Run("vehicle.steadyStateTopSpeed", VehicleDynamicsTests.SteadyStateTopSpeed);

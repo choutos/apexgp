@@ -116,7 +116,9 @@ public partial class CareerUi : CanvasLayer
 
     public void ShowScreen(Screen s)
     {
+        var was = _screen;
         _screen = s;
+        if (was == Screen.Dealership && s != Screen.Dealership) _main.ShowroomHide();
         _main.SetRaceVisible(s == Screen.Hub && false); // race only during an event
         ClearList();
         switch (s)
@@ -150,18 +152,26 @@ public partial class CareerUi : CanvasLayer
             case Screen.Dealership:
                 _title.Text = "DEALERSHIP";
                 _info.Text = $"{_profile.Credits:F0} Cr";
+                bool first = true;
                 foreach (var spec in CarSpec.All)
                 {
                     var owned = _profile.Garage.Any(g => g.CarId == spec.Id);
+                    var captured = spec;
                     _list.AddChild(Btn(
                         owned ? $"{spec.Name} — OWNED" : $"{spec.Name} — {spec.Price:F0} Cr",
                         () =>
                         {
                             if (owned) return;
-                            try { Career.BuyCar(_profile, spec); }
+                            try { Career.BuyCar(_profile, captured); }
                             catch (InvalidOperationException) { }
                             ShowScreen(Screen.Dealership);
-                        }));
+                        },
+                        () => _main.ShowroomShow(captured.PaintHex)));
+                    if (first)
+                    {
+                        _main.ShowroomShow(spec.PaintHex);
+                        first = false;
+                    }
                 }
                 _list.AddChild(Btn("← BACK", () => ShowScreen(Screen.Hub)));
                 break;
@@ -222,10 +232,11 @@ public partial class CareerUi : CanvasLayer
         }
     }
 
-    private Button Btn(string text, Action onClick)
+    private Button Btn(string text, Action onClick, Action? onHover = null)
     {
         var b = new Button { Text = text, CustomMinimumSize = new Vector2(0, 40) };
         b.Pressed += () => onClick();
+        if (onHover != null) b.MouseEntered += () => onHover();
         return b;
     }
 

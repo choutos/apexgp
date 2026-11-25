@@ -60,6 +60,7 @@ public partial class Main : Node3D
 
         BuildWorld(vp);
         BuildHud();
+        BuildShowroom();
         _profile = CareerProfile.Load(CareerUi.UserProfilePath);
 
         if (OS.GetEnvironment("APEXGP_SMOKE") == "1")
@@ -76,6 +77,11 @@ public partial class Main : Node3D
         _careerUi = new CareerUi();
         AddChild(_careerUi);
         _careerUi.SetReplayHandler(StartReplay);
+
+        // Screenshot hook for visual CI (requires a real display — runners have Xvfb).
+        _shotPath = OS.GetEnvironment("APEXGP_SHOT_DEALERSHIP");
+        if (_shotPath != "")
+            _careerUi.ShowScreen(CareerUi.Screen.Dealership);
 
         // pause overlay (Esc toggles; SceneTree.Paused stops physics — cars freeze)
         _pauseLabel = new Label
@@ -325,6 +331,8 @@ public partial class Main : Node3D
 
     public override void _Process(double delta)
     {
+        UpdateShowroom(delta);
+        CaptureScreenshotIfRequested();
         if (_carNodes.Count == 0 || _player == null) return;
         ChaseCamera(delta);
 
@@ -415,6 +423,139 @@ public partial class Main : Node3D
 
         _camera = new Camera3D { Fov = 68f, Current = true };
         world.AddChild(_camera);
+    }
+
+    // ---------- dealership showroom ----------
+    private SubViewportContainer? _showroomContainer;
+    private Node3D _showroomTurntable = null!;   // rotates; car is its child
+    private CarController? _showroomCar;
+
+    private void BuildShowroom()
+    {
+        var vp = new SubViewport
+        {
+            Size = new Vector2I(420, 300),
+            OwnWorld3D = true,
+            AudioListenerEnable3D = false,
+        };
+        vp.RenderTargetUpdateMode = SubViewport.UpdateMode.Always;
+
+        vp.AddChild(new WorldEnvironment
+        {
+            Environment = new Godot.Environment
+            {
+                BackgroundMode = Godot.Environment.BGMode.Color,
+                BackgroundColor = new Color(0.055f, 0.065f, 0.09f),
+                AmbientLightSource = Godot.Environment.AmbientSource.Color,
+                AmbientLightColor = new Color(0.45f, 0.5f, 0.6f),
+                AmbientLightEnergy = 0.4f,
+            },
+        });
+
+        var key = new DirectionalLight3D
+        {
+            RotationDegrees = new Vector3(-55f, 25f, 0f),
+            LightEnergy = 1.3f,
+        };
+        vp.AddChild(key);
+        var fill = new DirectionalLight3D
+        {
+            RotationDegrees = new Vector3(-20f, -140f, 0f),
+            LightEnergy = 0.5f,
+            LightColor = new Color(0.7f, 0.78f, 0.95f),
+        };
+        vp.AddChild(fill);
+
+        // turntable disc + car stage
+        _showroomTurntable = new Node3D();
+        var disc = new MeshInstance3D
+        {
+            Mesh = new CylinderMesh { TopRadius = 2.6f, BottomRadius = 2.6f, Height = 0.08f, RadialSegments = 48 },
+            Position = new Vector3(0, 0.04f, 0),
+        };
+        disc.MaterialOverride = new StandardMaterial3D
+        {
+            AlbedoColor = new Color(0.32f, 0.34f, 0.4f),
+            Roughness = 0.25f,
+            Metallic = 0.6f,
+        };
+        _showroomTurntable.AddChild(disc);
+        vp.AddChild(_showroomTurntable);
+
+        // dark backdrop so the paint reads
+        var back = new MeshInstance3D
+        {
+            Mesh = new BoxMesh { Size = new Vector3(14f, 6f, 0.3f) },
+            Position = new Vector3(0f, 3f, -5.5f),
+        };
+        back.MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color(0.10f, 0.11f, 0.15f), Roughness = 1f };
+        vp.AddChild(back);
+
+        var cam = new Camera3D
+        {
+            Position = new Vector3(3.6f, 1.7f, 4.6f),
+            Fov = 42f,
+            Current = true,
+        };
+        cam.LookAtFromPosition(cam.Position, new Vector3(0f, 0.62f, 0f), Vector3.Up);
+        vp.AddChild(cam);
+
+        _showroomContainer = new SubViewportContainer
+        {
+            AnchorLeft = 0.53f, AnchorTop = 0.30f, AnchorRight = 0.97f, AnchorBottom = 0.78f,
+            TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
+        };
+        _showroomContainer.AddChild(vp);
+        _showroomContainer.Visible = false;
+        AddChild(_showroomContainer);
+    }
+
+    /// <summary>Show a car on the dealership turntable (RRGGBB paint hex).</summary>
+    public void ShowroomShow(string paintHex)
+    {
+        if (_showroomContainer == null) return;
+        _showroomContainer.Visible = true;
+        _showroomCar?.QueueFree();
+        _showroomCar = new CarController { GhostMode = true }.WithPaint(HexToColor(paintHex));
+        _showroomCar.Position = new Vector3(0f, 0.66f, 0f); // turntable top + resting chassis height
+        _showroomTurntable.AddChild(_showroomCar);
+    }
+
+    public void ShowroomHide()
+    {
+        if (_showroomContainer != null) _showroomContainer.Visible = false;
+    }
+
+    private static Color HexToColor(string hex)
+    {
+        hex = hex.TrimStart('#');
+        if (hex.Length != 6 || !System.Text.RegularExpressions.Regex.IsMatch(hex, "\\A[0-9a-fA-F]{6}\\z"))
+            return new Color(0.78f, 0.16f, 0.12f);
+        return new Color(
+            System.Convert.ToInt32(hex[..2], 16) / 255f,
+            System.Convert.ToInt32(hex[2..4], 16) / 255f,
+            System.Convert.ToInt32(hex[4..6], 16) / 255f, 1f);
+    }
+
+    private void UpdateShowroom(double delta)
+    {
+        if (_showroomContainer is { Visible: true })
+            _showroomTurntable.RotateY((float)(delta * 0.85));
+    }
+
+    private string _shotPath = "";
+    private int _shotFrame = -1;
+
+    private void CaptureScreenshotIfRequested()
+    {
+        if (_shotPath == "") return;
+        _shotFrame = _shotFrame < 0 ? 0 : _shotFrame + 1;
+        if (_shotFrame < 45) return;
+        var img = GetViewport().GetTexture().GetImage();
+        img.SavePng(_shotPath);
+        GD.Print($"APEXGP_SHOT saved to {_shotPath}");
+        _shotPath = "";
+        GetTree().Quit();
     }
 
     private void BuildHud()

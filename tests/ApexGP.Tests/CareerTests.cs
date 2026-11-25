@@ -120,6 +120,13 @@ public static class CareerTests
         Console.WriteLine($"      (stock starter won Cup R1 in {race.Result!.Duration:F1}s, +{prize:F0} Cr)");
     }
 
+    public static void PaintHexIsValid()
+    {
+        foreach (var spec in CarSpec.All)
+            Checks.Check(System.Text.RegularExpressions.Regex.IsMatch(spec.PaintHex, "\\A[0-9a-fA-F]{6}\\z"),
+                $"car {spec.Id} has invalid PaintHex '{spec.PaintHex}'");
+    }
+
     public static void Ladder_ProgressionIsCompletable()
     {
         // Intended economy: start → 2× Cup1 + Cup2 + Dolphin wins → Corvid tier
