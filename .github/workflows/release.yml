@@ -1,0 +1,76 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GODOT_VERSION: 4.7.2  # pin; bump deliberately together with export_presets.cfg
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET (required by the Godot mono build)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install Godot mono + export templates
+        run: |
+          curl -fL -o godot_mono.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64.zip"
+          unzip -q godot_mono.zip
+          BIN="Godot_v${GODOT_VERSION}-stable_mono_linux_x86_64/Godot_v${GODOT_VERSION}-stable_mono_linux.x86_64"
+          chmod +x "$BIN"
+          echo "GODOT_BIN=$BIN" >> "$GITHUB_ENV"
+          curl -fL -o templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_mono_export_templates.tpz"
+          mkdir -p "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          unzip -q templates.tpz 'templates/*' -d /tmp/tpl
+          cp /tmp/tpl/templates/linux_release.x86_64 "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          cp /tmp/tpl/templates/linux_debug.x86_64 "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          cp /tmp/tpl/templates/windows_release_x86_64.exe "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          cp /tmp/tpl/templates/windows_debug_x86_64.exe "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable/"
+          "$BIN" --version
+
+      - name: Import project (class cache)
+        run: $GODOT_BIN --headless --path engine --import || true
+
+      - name: Export Linux x86_64
+        run: |
+          mkdir -p build
+          "$GODOT_BIN" --headless --path engine --export-release "Linux" build/apexgp_linux/ApexGP.x86_64
+
+      - name: Export Windows x86_64
+        run: |
+          "$GODOT_BIN" --headless --path engine --export-release "Windows" build/apexgp_windows/ApexGP.exe
+
+      - name: Smoke the Linux export
+        run: |
+          APEXGP_SMOKE=1 ./build/apexgp_linux/ApexGP.x86_64 --headless --quit-after 700 2>&1 | tee smoke_export.log
+          accel=$(grep -oE "APEXGP_SMOKE accel=[0-9.]+" smoke_export.log | head -1 | cut -d= -f2)
+          echo "exported smoke accel=${accel} km/h"
+          awk -v a="$accel" 'BEGIN { exit !((a+0) >= 15.0) }'
+
+      - name: Package
+        run: |
+          cd build
+          zip -r apexgp_linux.zip apexgp_linux
+          zip -r apexgp_windows.zip apexgp_windows
+          sha256sum *.zip > SHA256SUMS.txt
+
+      - name: Attach to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/apexgp_linux.zip
+            build/apexgp_windows.zip
+            build/SHA256SUMS.txt
+          body: |
+            **ApexGP** — original clean-room racing sim.
+
+            - `apexgp_linux.zip`: run `./ApexGP.x86_64` (needs the .NET 8 runtime; gamepad + keyboard).
+            - `apexgp_windows.zip`: run `ApexGP.exe` (SmartScreen: "More info → Run anyway", unsigned build).
+            - Source + licence: see the repo README.

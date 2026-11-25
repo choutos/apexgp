@@ -6,3 +6,4 @@ TestResults/
 .godot/
 .DS_Store
 .godot/
+build/

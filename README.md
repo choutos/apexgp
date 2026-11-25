@@ -20,7 +20,7 @@ title are referenced, derived from, or shipped with this project.
 4. **Vertical slice discipline.** Driving feel outranks content volume until
    the feel is right.
 
-## Current state (v0.1 "Vertical Slice+")
+## Current state (v0.4 "PS1 Look & Feel")
 
 - **Simulation core** (`src/ApexGP.Core`, pure C#): 6-DOF chassis, Pacejka tire
   model with load sensitivity and combined-slip ellipse, independent
@@ -28,16 +28,21 @@ title are referenced, derived from, or shipped with this project.
   clutch with launch behaviour, 5-speed auto gearbox, ABS + progressive TCS.
 - **Track pipeline**: Catmull-Rom circuit builder with racing line and a
   braking-aware speed profile; tarmac/kerb/grass grip model; lap timing with
-  cut detection. First circuit: *Sunrise Loop* (1.38 km).
-- **AI**: racing-line followers with per-driver pace, grid starts, live
-  positions, results.
-- **Career**: credits, garage, dealership (4 original models), tuning shop
-  (7 parts with real physics effects), licence school (human-driven gate
-  tests), event calendar with entry requirements and payouts. Profile
-  persists to JSON.
-- **Godot 4.7 shell** (`engine/`): 3D race with chase camera, HUD
-  (speed/gear/rpm/position/lap), procedural engine audio, keyboard +
-  gamepad input.
+  cut detection. Circuits: *Sunrise Loop* (1.38 km), *Dolphin Ring*, *Kanyu
+  Pass* (technical hillclimb-style with hairpin, esses and chicane).
+- **Racing**: grid starts, live positions, sphere-based car-to-car contacts,
+  invisible walls with forgiving bounce (no infield cuts), results podium.
+- **AI**: racing-line followers with per-driver pace; rivals use varied cars.
+- **Career**: credits, garage, dealership (7 original models), tuning shop
+  (7 parts with real physics effects), licence school (club on Sunrise Loop,
+  national on Dolphin Ring), 6 events with entry requirements and payouts.
+  Profile persists to JSON.
+- **Godot 4.7 shell** (`engine/`): 480×270 nearest-upscaled PS1-style render,
+  detailed low-poly cars (brake lights, spoilers, hubs), track furniture
+  (guard rails, trees, start gantry), chase camera, HUD
+  (speed/gear/rpm/position/lap), procedural engine audio, gamepad rumble on
+  tire slip, keyboard + gamepad input, Esc pause, and replay playback
+  (press **R** on the results screen).
 
 ## Build & test
 
@@ -65,8 +70,22 @@ tests/           headless acceptance tests (no external deps)
 
 ## Status
 
-See `docs/ROADMAP.md` — M0/M0.5/M1/M2a complete (22 acceptance tests green).
-Next up: visual polish pass, more cars/tracks, force feedback tuning.
+See `docs/ROADMAP.md` — 30 acceptance tests green (sim, tracks, races,
+contacts, career economy, replay round-trip).
+Next up: damage model (optional), split-screen, more circuits.
+
+## Releases
+
+Every `vX.Y.Z` tag triggers `.github/workflows/release.yml`, which exports
+standalone **Linux x86_64** and **Windows x86_64** builds and attaches them
+to the GitHub release (smoke-tested in CI before upload). SHA256 checksums
+are included in each release.
+
+Running an export locally (requires Godot 4.7 .NET + export templates):
+
+```sh
+godot --headless --path engine --export-release "Linux" ../build/ApexGP.x86_64
+```
 
 ## License
 
