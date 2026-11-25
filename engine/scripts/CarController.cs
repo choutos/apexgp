@@ -44,6 +44,16 @@ public partial class CarController : Node3D
     private double _brakeGlow;
     private Color _paint = new(0.78f, 0.16f, 0.12f);
 
+    /// <summary>Replay ghost: visuals only, transform driven by the replay sampler.</summary>
+    public bool GhostMode { get; set; }
+    private VehicleConfig _ghostConfig = null!;
+
+    public void SetGhostTransform(Vector3 pos, Quaternion rot)
+    {
+        Position = pos;
+        Basis = new Basis(rot);
+    }
+
     public Vehicle Sim => _vehicle;
 
     public void SetSurface(ITrackSurface surface) => _vehicle.Surface = surface;
@@ -113,6 +123,14 @@ public partial class CarController : Node3D
     {
         _vehicle = _injected ?? new Vehicle(VehicleConfig.PrototypeGtB());
         _vehicle.Position = new System.Numerics.Vector3(0f, 1.0f, 0f);
+        if (GhostMode)
+        {
+            // replay ghost: visuals only, no sim, no audio, no input
+            _ghostConfig = VehicleConfig.PrototypeGtB();
+            BuildBody();
+            BuildWheels();
+            return;
+        }
         BuildBody();
         BuildWheels();
         BuildEngineAudio();
@@ -244,6 +262,7 @@ public partial class CarController : Node3D
 
     public override void _PhysicsProcess(double delta)
     {
+        if (GhostMode) return; // transform driven externally by the replay sampler
         if (_smokeMode)
         {
             _smokeT += delta;

@@ -30,6 +30,18 @@ public static class TrackTests
         Checks.Check(t.SpeedTargets.Min() > 8.0, $"profile has a near-zero-speed point: {t.SpeedTargets.Min() * 3.6:F0} km/h");
     }
 
+    public static void Build_KanyuPassIsValid()
+    {
+        var t = TrackCatalog.KanyuPass();
+        Checks.Check(t.TotalLength > 700 && t.TotalLength < 1800, $"unreasonable Kanyu Pass length {t.TotalLength:F0} m");
+        int n = t.Samples.Length;
+        double gap = Dist(t.Samples[n - 1], t.Samples[0]);
+        Checks.Check(gap < 7.0, $"Kanyu Pass does not close: {gap:F1} m gap");
+        Checks.Check(t.SpeedTargets.Min() > 6.0, $"profile has a near-zero-speed point: {t.SpeedTargets.Min() * 3.6:F0} km/h");
+        double maxK = t.Samples.Max(s => System.Math.Abs(s.Curvature));
+        Checks.Check(maxK > 0.02, $"Kanyu Pass should have at least one tight hairpin (max κ={maxK:F3})");
+    }
+
     public static void GripModel_OffTrackIsSlippery()
     {
         var t = TrackCatalog.SunriseLoop();

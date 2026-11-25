@@ -157,8 +157,10 @@ public sealed class RaceController
     // Walls: lateral clamp at halfWidth * WallFactor with soft bounce — cuts
     // are now impossible, matching GT1's invisible-wall behaviour.
     private const double CarRadius = 1.15;
-    private const double WallFactor = 1.32;
+    private const double WallFactor = 1.32;      // forgiving runoff (GT1-style)
     private const double Restitution = 0.3;
+    private const double WallRestitution = 0.45;
+    private const double WallMinSlide = 2.5;     // m/s tangential floor so wedged cars slide out
 
     private void ResolveCarCarCollisions()
     {
@@ -220,8 +222,23 @@ public sealed class RaceController
             if (System.Math.Sign(vLat) == sign)
             {
                 var right = new System.Numerics.Vector3((float)s.RightX, 0f, (float)s.RightZ);
-                car.Velocity -= right * (float)(vLat * (1 + Restitution));
+                car.Velocity -= right * (float)(vLat * (1 + WallRestitution));
                 r.ContactCooldown = 0.4;
+            }
+
+            // slide-along: a car nose-in against the wall keeps a tangential crawl so
+            // it can't pin itself there forever; the AI's steering then walks it out.
+            double vTan = car.Velocity.X * s.DirX + car.Velocity.Z * s.DirZ;
+            if (System.Math.Abs(vTan) < WallMinSlide)
+            {
+                var fwd = System.Numerics.Vector3.Transform(System.Numerics.Vector3.UnitZ, car.Orientation);
+                double fwdTan = -(fwd.X * s.DirX + fwd.Z * s.DirZ);
+                double dir = System.Math.Abs(vTan) > 0.5 ? System.Math.Sign(vTan) : (fwdTan >= 0 ? 1 : -1);
+                double latAfterBounce = -(vLat * (System.Math.Sign(vLat) == sign ? 1 : 0)) * (1 + WallRestitution);
+                car.Velocity = new System.Numerics.Vector3(
+                    (float)(s.DirX * WallMinSlide * dir + s.RightX * latAfterBounce),
+                    car.Velocity.Y,
+                    (float)(s.DirZ * WallMinSlide * dir + s.RightZ * latAfterBounce));
             }
         }
     }
@@ -229,10 +246,13 @@ public sealed class RaceController
     private void UpdatePositions()
     {
         if (Phase != RacePhase.Racing && Phase != RacePhase.Finished) return;
+        // finished cars rank strictly by finish time; unfinished cars fall back
+        // to laps/progress (a car just before the line must not outrank one
+        // that has already crossed — that cost the wrong podium in testing)
         var ordered = Racers
-            .OrderByDescending(r => r.Laps)
+            .OrderBy(r => r.FinishTime)
+            .ThenByDescending(r => r.Laps)
             .ThenByDescending(r => ProgressS(r))
-            .ThenBy(r => r.FinishTime)
             .ToList();
         for (int i = 0; i < ordered.Count; i++) ordered[i].Position = i + 1;
     }

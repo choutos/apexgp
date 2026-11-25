@@ -43,6 +43,20 @@ public static class EventCalendar
         },
         new()
         {
+            Id = "kanyuSprint", Name = "Kanyu Hillclimb Sprint", TrackName = "Kanyu Pass",
+            Laps = 2, RequiredLicense = "club", EntryFee = 600, Prize = 9500,
+            AiSpeedFactors = new[] { 0.92, 0.89, 0.85 },
+            RivalCarIds = ["touringS", "corvid", "apexRS"],
+        },
+        new()
+        {
+            Id = "kanyuChallenge", Name = "Kanyu Challenge", TrackName = "Kanyu Pass",
+            Laps = 3, RequiredLicense = "national", EntryFee = 1200, Prize = 20000,
+            AiSpeedFactors = new[] { 0.93, 0.92, 0.89, 0.86 },
+            RivalCarIds = ["tsukasa", "onibi", "gtLegend", "tsukasa"],
+        },
+        new()
+        {
             Id = "sunriseEnduro", Name = "Sunrise Enduro", TrackName = "Sunrise Loop",
             Laps = 5, RequiredLicense = "national", EntryFee = 1000, Prize = 16000,
             AiSpeedFactors = new[] { 0.98, 0.96, 0.94, 0.90 },

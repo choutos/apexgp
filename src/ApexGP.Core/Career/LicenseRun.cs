@@ -15,7 +15,7 @@ public static class LicenseCatalog
     public static readonly List<LicenseTestDef> All = new()
     {
         new() { Id = "club", Name = "Club Licence", TrackName = "Sunrise Loop", TimeLimit = 95, GateCount = 8 },
-        new() { Id = "national", Name = "National Licence", TrackName = "Sunrise Loop", TimeLimit = 82, GateCount = 10 },
+        new() { Id = "national", Name = "National Licence", TrackName = "Dolphin Ring", TimeLimit = 82, GateCount = 10 },
     };
 
     public static LicenseTestDef ById(string id) => All.FirstOrDefault(l => l.Id == id)

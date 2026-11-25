@@ -141,6 +141,31 @@ public static class CareerTests
         Checks.Check(p.Credits == 13200 - 5500, $"credits after eng2 tune wrong: {p.Credits}");
     }
 
+    public static void Balance_TunedCorvidCanWinKanyuChallenge()
+    {
+        var p = CareerProfile.New();
+        p.Credits = 60000;
+        p.Licenses.Add("national");
+        Career.BuyCar(p, CarSpec.ById("corvid"));
+        Career.TuneCar(p, "eng2");
+        Career.TuneCar(p, "weight1");
+        Career.TuneCar(p, "tires");
+        var ev = EventCalendar.ById("kanyuChallenge");
+        var track = TrackCatalog.KanyuPass();
+        var race = Career.StartEvent(p, ev, track, Career.ConfigFor(p), playerIsAi: true);
+
+        double dt = 1.0 / 120.0, t = 0;
+        while (race.Phase != RacePhase.Finished && t < 600)
+        {
+            race.Step(dt, null);
+            t += dt;
+        }
+        Checks.Check(race.Phase == RacePhase.Finished, "Kanyu Challenge did not finish");
+        var player = race.Racers.First(r => r.IsPlayer);
+        Checks.Check(player.Position <= 2, $"tuned Corvid finished P{player.Position} at Kanyu Challenge — third tier unreachable");
+        Console.WriteLine($"      (tuned Corvid finished P{player.Position} in Kanyu Challenge, {race.Result!.Duration:F1}s)");
+    }
+
     private static void SpawnOnTrack(Vehicle v, TrackSurface track)
     {
         var s = track.Samples[0];

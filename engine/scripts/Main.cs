@@ -75,6 +75,7 @@ public partial class Main : Node3D
 
         _careerUi = new CareerUi();
         AddChild(_careerUi);
+        _careerUi.SetReplayHandler(StartReplay);
 
         // pause overlay (Esc toggles; SceneTree.Paused stops physics — cars freeze)
         _pauseLabel = new Label
@@ -96,9 +97,12 @@ public partial class Main : Node3D
         if (@event is not InputEventKey { Pressed: true } key) return;
         if (key.Keycode == Key.Escape)
         {
+            if (_replayMode) { EndReplay(); return; }
             GetTree().Paused = !GetTree().Paused;
             _pauseLabel.Visible = GetTree().Paused;
         }
+        if (key.Keycode == Key.R && _resultsShown && !_replayMode)
+            StartReplay();
     }
 
     // ---------- race lifecycle ----------
@@ -135,6 +139,7 @@ public partial class Main : Node3D
         var eventTrack = TrackCatalog.ByName(ev.TrackName);
         RebuildTrackVisuals(eventTrack);
         _race = Career.StartEvent(profile, ev, Track, Career.ConfigFor(profile), playerIsAi: false);
+        _replay = new ReplayRecorder();
         var paints = new[] { new Color(0.78f, 0.16f, 0.12f), new Color(0.16f, 0.38f, 0.82f),
                              new Color(0.88f, 0.88f, 0.86f), new Color(0.95f, 0.6f, 0.1f), new Color(0.2f, 0.7f, 0.3f) };
         for (int i = 0; i < _race.Racers.Count; i++)
@@ -246,6 +251,7 @@ public partial class Main : Node3D
         {
             _player.PollInput();
             _race.Step(delta, (_player.ThrottleInput, _player.BrakeInput, _player.SteerInput));
+            _replay?.Capture(_race, _race.Time);
         }
         else
         {
@@ -259,8 +265,62 @@ public partial class Main : Node3D
             _resultsShown = true;
             var (prize, pos) = Career.CollectPrize(_profile, _activeEvent, _race);
             _profile.Save(CareerUi.UserProfilePath);
-            _careerUi?.ShowResults(_activeEvent, _race, prize, pos);
+            _careerUi?.ShowResults(_activeEvent, _race, prize, pos, _replay != null);
         }
+        UpdateReplayPlayback(delta);
+    }
+
+    private ReplayRecorder? _replay;
+    private bool _replayMode;
+    private double _replayTime;
+    private readonly List<CarController> _ghosts = new();
+
+    private void UpdateReplayPlayback(double delta)
+    {
+        if (!_replayMode) return;
+        _replayTime += delta;
+        var frames = _replay!.Sample(_replayTime);
+        if (frames != null)
+        {
+            for (int i = 0; i < _ghosts.Count && i < frames.Length; i++)
+            {
+                var f = frames[i];
+                _ghosts[i].SetGhostTransform(
+                    new Vector3((float)f.X, (float)f.Y, (float)f.Z),
+                    new Quaternion((float)f.Qx, (float)f.Qy, (float)f.Qz, (float)f.Qw));
+            }
+        }
+        if (_replayTime >= _replay.Duration + 0.5)
+            EndReplay();
+    }
+
+    private void StartReplay()
+    {
+        if (_replay == null) return;
+        _replayMode = true;
+        _replayTime = 0;
+        _careerUi?.ShowReplayBanner();
+        foreach (var n in _carNodes) n.Visible = false;
+        if (_ghosts.Count == 0)
+        {
+            var paints = new[] { new Color(0.78f, 0.16f, 0.12f), new Color(0.16f, 0.38f, 0.82f),
+                                 new Color(0.88f, 0.88f, 0.86f), new Color(0.95f, 0.6f, 0.1f), new Color(0.2f, 0.7f, 0.3f) };
+            for (int i = 0; i < _race!.Racers.Count; i++)
+            {
+                var g = new CarController { GhostMode = true }.WithPaint(paints[i % paints.Length]);
+                WorldViewport.AddChild(g);
+                _ghosts.Add(g);
+            }
+        }
+        foreach (var g in _ghosts) g.Visible = true;
+    }
+
+    private void EndReplay()
+    {
+        _replayMode = false;
+        foreach (var g in _ghosts) g.Visible = false;
+        foreach (var n in _carNodes) n.Visible = true;
+        _careerUi?.HideReplayBanner();
     }
 
     public override void _Process(double delta)
@@ -301,8 +361,9 @@ public partial class Main : Node3D
 
     private void ChaseCamera(double delta)
     {
-        var carPos = _player.GlobalPosition;
-        var back = -_player.GlobalTransform.Basis.Z;
+        Node3D follow = _replayMode && _ghosts.Count > 0 ? _ghosts[0] : _player;
+        var carPos = follow.GlobalPosition;
+        var back = -follow.GlobalTransform.Basis.Z;
         var target = carPos - back * 5.2f + Vector3.Up * 2.3f;
         var k = 1f - Mathf.Exp((float)-(6.0 * delta));
         _camera.GlobalPosition = _camera.GlobalPosition.Lerp(target, k);

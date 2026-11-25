@@ -27,11 +27,13 @@ public static class Program
         Run("vehicle.brakesFrom100", VehicleDynamicsTests.BrakesFrom100Kmh);
         Run("track.buildClosesLoop", TrackTests.Build_ClosesLoopAndMeasuresLength);
         Run("track.dolphinRing", TrackTests.Build_DolphinRingIsValid);
+        Run("track.kanyuPass", TrackTests.Build_KanyuPassIsValid);
         Run("track.gripModel", TrackTests.GripModel_OffTrackIsSlippery);
         Run("track.botCompletesLaps", TrackTests.Bot_CompletesThreeLapsOnTrack);
         Run("race.threeCarCompletes", RaceTests.ThreeCarRace_CompletesWithSaneOrdering);
         Run("race.carCarCollision", RaceTests.CarCarCollision_SeparatesWithoutDivergence);
         Run("race.wallClamp", RaceTests.WallClamp_PreventsInfieldCuts);
+        Run("race.replayRecorder", RaceTests.ReplayRecorder_CapturesAndRoundTrips);
         Run("career.buyTuneConfig", CareerTests.BuyTuneAndInspectConfig);
         Run("career.buyRejectsWhenBroke", CareerTests.BuyRejectsWhenBroke);
         Run("career.eventEntryAndRace", CareerTests.EventEntryRequiresLicenseAndFunds);
@@ -39,6 +41,7 @@ public static class Program
         Run("career.profileRoundTrip", CareerTests.ProfileRoundTrip);
         Run("career.balanceCup1", CareerTests.Balance_StockCarCanWinCup1);
         Run("career.ladder", CareerTests.Ladder_ProgressionIsCompletable);
+        Run("career.kanyuChallenge", CareerTests.Balance_TunedCorvidCanWinKanyuChallenge);
         Run("vehicle.brakesFromLowSpeed", VehicleDynamicsTests.BrakesFromLowSpeed);
         Run("vehicle.steadyStateTopSpeed", VehicleDynamicsTests.SteadyStateTopSpeed);
         Run("vehicle.cornering", VehicleDynamicsTests.CorneringSteersAndStaysSane);

@@ -87,7 +87,7 @@ public static class RaceTests
         car.SteerInput = 0.9; // hard right, off track
 
         double dt = 1.0 / 120.0;
-        double wallLat = track.HalfWidth * 1.32;
+        double wallLat = track.HalfWidth * 1.06;
         double maxLat = 0;
         for (int i = 0; i < 120 * 6; i++)
         {
@@ -101,5 +101,47 @@ public static class RaceTests
         Checks.Check(!car.Diverged, "wall clamp caused divergence");
         Checks.Check(maxLat <= wallLat + 0.6, $"car exceeded wall by {maxLat - wallLat:F1} m (max lat {maxLat:F1} m)");
         Console.WriteLine($"      (max lateral offset {maxLat:F1} m, wall at {wallLat:F1} m)");
+    }
+
+    public static void ReplayRecorder_CapturesAndRoundTrips()
+    {
+        var track = TrackCatalog.SunriseLoop();
+        var race = new RaceController(track, laps: 1);
+        race.AddRacer("A", VehicleConfig.PrototypeGtB(), isPlayer: false, ai: new RacingLineFollower(track) { SpeedFactor = 1.0 }, lateralOffset: 0);
+        race.AddRacer("B", VehicleConfig.PrototypeGtB(), isPlayer: false, ai: new RacingLineFollower(track) { SpeedFactor = 0.9 }, lateralOffset: 0);
+
+        var rec = new ReplayRecorder();
+        double dt = 1.0 / 120.0, t = 0;
+        int step = 0;
+        while (race.Phase != RacePhase.Finished && t < 200)
+        {
+            race.Step(dt, null);
+            t += dt;
+            if (++step % 6 == 0) rec.Capture(race, t); // ~20 Hz capture grid
+        }
+
+        Checks.Check(rec.FrameCount > 100, $"too few replay frames: {rec.FrameCount}");
+        Checks.Check(rec.RacerCount == 2, "wrong racer count in replay");
+        var last = rec.Sample(rec.Duration - 0.05)!;
+        Checks.Check(last.Length == 2, "replay sample must return one frame per racer");
+
+        // car A should be near its final recorded position
+        var carA = race.Racers[0].Car;
+        double dist = System.Math.Sqrt(
+            (carA.Position.X - last[0].X) * (carA.Position.X - last[0].X) +
+            (carA.Position.Z - last[0].Z) * (carA.Position.Z - last[0].Z));
+        Checks.Check(dist < 3.0, $"replay end frame too far from live car: {dist:F1} m");
+
+        // JSON round-trip
+        var clone = ReplayRecorder.FromJson(rec.ToJson());
+        Checks.Check(clone.FrameCount == rec.FrameCount && clone.Duration.ToString("0.0") == rec.Duration.ToString("0.0"), "round-trip lost frames/duration");
+        var cloneSample = clone.Sample(rec.Duration - 0.05)!;
+        Checks.Check(System.Math.Abs(cloneSample[1].X - last[1].X) < 1e-4, "round-trip position mismatch");
+        Checks.Check(System.Math.Abs(cloneSample[1].Qw - last[1].Qw) < 1e-4, "round-trip orientation mismatch");
+
+        // sample before the first capture returns the first frame (clamp)
+        var early = rec.Sample(-5.0);
+        Checks.Check(early != null, "sample before start should clamp to first frame");
+        Console.WriteLine($"      (replay: {rec.FrameCount} frames, {rec.Duration:F1}s, round-trip ok)");
     }
 }

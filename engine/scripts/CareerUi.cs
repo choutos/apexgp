@@ -69,7 +69,7 @@ public partial class CareerUi : CanvasLayer
         System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile),
             ".apexgp", "profile.json");
 
-    public void ShowResults(EventDef ev, RaceController race, double prize, int position)
+    public void ShowResults(EventDef ev, RaceController race, double prize, int position, bool hasReplay = false)
     {
         _screen = Screen.Results;
         _pendingEvent = null;
@@ -88,7 +88,30 @@ public partial class CareerUi : CanvasLayer
             _list.AddChild(row);
         }
         _list.AddChild(Btn($"Prize: {prize:F0} Cr  (P{position})", () => ShowScreen(Screen.Hub)));
+        if (hasReplay)
+            _list.AddChild(Btn("WATCH REPLAY (R)", () => RequestReplay()));
         _profile.Save(UserProfilePath);
+    }
+
+    private System.Action? _replayRequest;
+
+    /// <summary>UI button hook — Main registers the replay starter here.</summary>
+    public void SetReplayHandler(System.Action start) => _replayRequest = start;
+
+    private void RequestReplay() => _replayRequest?.Invoke();
+
+    public void ShowReplayBanner()
+    {
+        _title.Text = "REPLAY";
+        _info.Text = "ESC to exit";
+        _list.Visible = false;
+    }
+
+    public void HideReplayBanner()
+    {
+        _list.Visible = true;
+        if (_screen == Screen.Results) _title.Text = "RACE RESULTS";
+        _info.Text = "";
     }
 
     public void ShowScreen(Screen s)
@@ -100,7 +123,7 @@ public partial class CareerUi : CanvasLayer
         {
             case Screen.Title:
                 _title.Text = "APEXGP";
-                _info.Text = "An original racing sim. v0.1";
+                _info.Text = "An original racing sim. v0.4";
                 _list.AddChild(Btn("START CAREER", () => ShowScreen(Screen.Hub)));
                 break;
 
